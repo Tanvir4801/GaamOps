@@ -1,0 +1,452 @@
+Build a complete production-ready web admin panel called GaamOps 
+for managing the GaamRide mobile app.
+
+GaamRide is a village ride + logistics platform in rural Gujarat, India.
+Two modules: GaamRide (person transport) + GaamHaul (tempo/truck for farmers)
+Service area: 9 villages in Mahuva taluka, Surat district, Gujarat.
+
+---
+
+## TECH STACK
+
+- React.js (with Vite)
+- Firebase Firestore (same database as Flutter app)
+- Firebase Auth (admin Google login only)
+- Tailwind CSS (styling)
+- Recharts (charts and graphs)
+- React Router (navigation)
+- Google Maps JS API (live tracking map)
+
+---
+
+## FIREBASE COLLECTIONS (same as Flutter app)
+
+users/{userId}          → all registered users
+saathis/{userId}        → ride drivers  
+rides/{rideId}          → ride bookings
+haul_vehicles/{userId}  → tempo/truck owners
+haul_bookings/{id}      → haul bookings
+villages/{villageId}    → 9 approved villages
+
+---
+
+## WHO CAN ACCESS GAAMOPS
+
+Only specific admin emails (hardcoded whitelist):
+- Check Firebase Auth email against allowed list
+- If not admin → show "Access Denied" page
+- No self-registration, admin-only Google login
+
+---
+
+## SIDEBAR NAVIGATION
+
+Left sidebar always visible on desktop.
+Collapsible on mobile.
+
+
+GaamOps Logo (green + orange)
+
+OVERVIEW 📊 Dashboard
+
+GAAMRIDE 🛵 Live Rides 👥 All Saathi 📋 Ride History
+
+GAAMHAUL
+🚛 Live Hauls 🚜 All Vehicles 📋 Haul History
+
+USERS 👤 All Users ✅ Verifications
+
+VILLAGES 🗺️ Village Manager
+
+EARNINGS 💰 Revenue
+
+SETTINGS ⚙️ App Settings
+
+
+
+---
+
+## PAGE 1 — DASHBOARD (home)
+
+Main overview page. Shows everything at a glance.
+
+### Top stats row (4 cards):
+[ Total Users Today ] [ Active Saathi Now ]
+[ Rides Today ] [ Revenue Today ]
+
+
+Each card shows:
+- Big number (real-time from Firestore)
+- % change vs yesterday (green arrow up / red arrow down)
+- Small icon
+
+### Second row — two module cards:
+GaamRide Today (green card) GaamHaul Today (orange card) Rides: 12 Bookings: 4 Active Saathi: 3 Active Vehicles: 2
+Completed: 10 Completed: 3 Cancelled: 2 Revenue: ₹300 Revenue: ₹440
+
+
+
+### Live Activity Feed (right side):
+Real-time stream of last 10 events:
+🛵 Raj accepted ride — Anaval→Tarkani 2 min ago 👤 New user registered — Priya Patel 5 min ago 🚛 Tempo booking — Kos→Dholikuva 8 min ago ✅ Ride completed — ₹44 earned 12 min ago ❌ Ride cancelled — customer 15 min ago
+
+
+Updates in real-time using Firestore onSnapshot.
+
+### Revenue chart (bottom):
+Line chart showing last 7 days revenue
+Two lines: GaamRide (green) + GaamHaul (orange)
+X-axis: Mon, Tue, Wed... 
+Y-axis: ₹ amount
+Built with Recharts LineChart.
+
+### Village activity heatmap:
+Simple table showing each village:
+Village | Rides Today | Saathi Online | Status Anaval | 4 | 2 | 🟢 Active Kos | 3 | 1 | 🟢 Active
+Tarkani | 2 | 0 | 🟡 No Saathi Dholikuva | 0 | 0 | 🔴 Inactive ...
+
+
+
+---
+
+## PAGE 2 — LIVE RIDES (GaamRide)
+
+Real-time view of all ongoing rides.
+
+### Left panel: Active rides list
+Each ride card shows:
+Ride #GR-2024-001 Customer: Priya Patel Saathi: Raj (🟢 Online) Route: Anaval → Tarkani Status: [🟡 Arriving] Started: 5 min ago Fare: ₹44
+
+
+Status color codes:
+- 🔵 Searching — finding saathi
+- 🟡 Accepted — saathi on way
+- 🟠 Started — ride in progress
+- 🟢 Completed
+- 🔴 Cancelled
+
+Click any ride → highlight on map
+
+### Right panel: Live Google Map
+- Shows ALL active rides simultaneously
+- Customer marker: blue person icon
+- Saathi marker: green bike icon (MOVES in real-time)
+- Line connecting customer ↔ Saathi
+- Tap marker → popup with ride details
+- Map bounded to village service area
+- Updates every 5 seconds from Firestore
+
+### Filter bar:
+[ All ] [ Searching ] [ Active ] [ Completed ] [ Cancelled ]
+[ Village dropdown ] [ Date picker ]
+
+---
+
+## PAGE 3 — ALL SAATHI
+
+Manage all registered Gaam Saathi (drivers).
+
+### Table view:
+Name | Phone | Village | Vehicle | Status | Rating | Rides | Action Raj | 98765 | Tarkani | Auto | 🟢 Online | ⭐4.8 | 127 | [View] [Block] Priya| 98764 | Anaval | Bike | 🔴 Offline| ⭐4.9 | 89 | [View] [Block]
+
+
+
+Columns:
+- Profile photo (small circle)
+- Name + phone
+- Village
+- Vehicle type badge (Auto/Bike/Cycle)
+- Status: Online (green dot) / Offline (grey dot)
+- Star rating
+- Total rides count
+- Last seen time
+- Actions: View Details, Block/Unblock
+
+### Search + Filter:
+- Search by name or phone
+- Filter by village dropdown
+- Filter by vehicle type
+- Filter by status (online/offline)
+- Filter by rating (below 3 stars = needs attention)
+
+### Saathi Detail Modal (when View clicked):
+[Profile Photo] Name: Raj Patel Phone: 9876543210 Village: Tarkani Vehicle: Auto — GJ05AB1234 Member since: Jan 2024 Rating: ⭐ 4.8 (127 ratings) Total rides: 127 Total earnings: ₹5,588 (estimated) Status: 🟢 Online now Current location: [mini map showing live position]
+
+Recent rides (last 5): Anaval→Kos ₹32 ✅ 2h ago Kos→Tarkani ₹28 ✅ 5h ago
+
+[Block Saathi] [Send WhatsApp] [Close]
+
+
+
+### Block Saathi:
+- Sets saathis/{id}/isBlocked: true
+- Blocked Saathi cannot go online in app
+- Admin sees red "Blocked" badge
+- Unblock button available
+
+---
+
+## PAGE 4 — RIDE HISTORY
+
+All rides ever created. Searchable, filterable.
+
+### Table:
+Ride ID | Date | Customer | Saathi | Route | Status | Fare | Duration GR-001 | 12 Apr| Priya | Raj | Anaval→Tarkani | ✅ | ₹44 | 18 min GR-002 | 12 Apr| Amit | - | Kos→Anaval | ❌ Cancelled | - | -
+
+
+
+### Filters:
+- Date range picker
+- Village (pickup or destination)
+- Status filter
+- Saathi name search
+- Customer name search
+
+### Export button:
+- Download as CSV
+- Columns: ID, date, customer, saathi, route, status, fare
+
+### Ride detail modal:
+Click any row → full details:
+Ride GR-2024-001 ━━━━━━━━━━━━━━━ Customer: Priya Patel (9876543210) Saathi: Raj Patel (9876543211) Pickup: Anaval (20.8306, 73.2469) Destination: Tarkani (20.8550, 73.2580) Distance: 3.2 km Fare: ₹44 Status: Completed ✅ Created: 12 Apr 2024, 10:30 AM Accepted: 10:32 AM (2 min wait) Started: 10:38 AM (6 min to arrive) Completed: 10:56 AM (18 min ride) Rating given: ⭐ 5 [Mini map showing ride route]
+
+
+
+---
+
+## PAGE 5 — LIVE HAULS (GaamHaul)
+
+Same as Live Rides but for haul bookings. Orange theme.
+
+### Active haul cards:
+Haul #GH-001 Farmer: Ramesh Patel Vehicle: Ramesh Desai (Mini Tempo) Pickup: Kos Duration: 2 hours Load: શાકભાજી (Vegetables) Status: [🟠 In Progress] Fare: ₹75 (your commission) Vehicle owner earns: ₹600
+
+
+
+### Map: Shows all active hauls
+- Farmer marker: orange farm icon
+- Vehicle marker: orange truck icon (moves real-time)
+
+---
+
+## PAGE 6 — ALL VEHICLES (GaamHaul)
+
+Similar to All Saathi but for vehicle owners.
+
+### Table:
+Owner | Phone | Village | Vehicle Type | Capacity | Rate/hr | Status | Bookings Ramesh| 98763 | Kos | Mini Tempo | 500kg | ₹600 | 🟢 Online | 23 Suresh| 98762 | Tarkani| Pickup Truck| 1000kg | ₹800 | 🔴 Offline| 8
+
+
+
+### Add Vehicle Owner (admin can add manually):
+Button → form:
+- Owner name, phone, village
+- Vehicle type + capacity + rate
+- Vehicle number
+- Creates haul_vehicles document directly
+
+---
+
+## PAGE 7 — ALL USERS
+
+All registered app users.
+
+### Table:
+Name | Phone | Role | Village | Joined | Rides | Status Priya | 98761 | Customer | Anaval | 10 Apr | 5 | ✅ Active Raj | 98762 | Saathi | Tarkani| 8 Apr | 127| ✅ Active Amit | 98763 | Both | Kos | 5 Apr | 12 | ✅ Active
+
+
+
+Role badges:
+- Customer: blue
+- Saathi: green
+- Haul Owner: orange
+- Both: purple
+
+### User detail modal:
+Full profile + all their rides/bookings history.
+
+### Admin actions:
+- Block user (cannot login)
+- Change role manually
+- Delete account (with confirmation)
+
+---
+
+## PAGE 8 — VILLAGE MANAGER
+
+Manage the 9 approved villages.
+
+### Village cards grid:
+[Anaval Card] আণવল (Anaval) Lat: 20.8306 | Lng: 73.2469 Active Saathi: 2 | Users: 34 Status: ✅ Active [Edit] [Deactivate]
+
+[Kos Card] ...
+
+
+
+### Add Village button:
+Form to add new village:
+- Name (English + Gujarati)
+- Lat/Lng (with map picker)
+- Taluka
+- Save → adds to Firestore villages collection + 
+  updates Flutter app service zone
+
+### Edit Village:
+- Update coordinates
+- Toggle active/inactive
+- Inactive villages don't appear in app dropdown
+
+### Map view tab:
+Shows all 9 villages on Google Map as pins.
+Draws the service boundary polygon around them.
+Admin can see visually if the boundary is correct.
+
+---
+
+## PAGE 9 — REVENUE
+
+Financial overview of the platform.
+
+### Top summary:
+Total Revenue (All Time) This Month This Week ₹12,450 ₹3,200 ₹840
+
+
+
+### Revenue breakdown table:
+Date | GaamRide Rides | GaamRide Rev | GaamHaul Bookings | GaamHaul Rev | Total 12 Apr | 12 | ₹440 | 4 | ₹300 | ₹740 11 Apr | 8 | ₹296 | 2 | ₹150 | ₹446
+
+
+
+Note: GaamRide revenue = sum of all completed ride fares
+GaamHaul revenue = ₹75 × completed haul bookings (your commission)
+
+### Charts:
+- Bar chart: Daily revenue last 30 days
+  Two bars per day: green (GaamRide) + orange (GaamHaul)
+- Pie chart: Revenue split by village
+- Line chart: Revenue trend last 3 months
+
+### Top performers:
+Top Saathi by rides: Top villages by activity:
+
+Raj Patel — 127 rides 1. Anaval — 45 rides
+Priya — 89 rides 2. Kos — 32 rides
+Suresh — 67 rides 3. Tarkani — 28 rides
+
+
+### Export:
+- Download revenue report as CSV
+- Date range selectable
+
+---
+
+## PAGE 10 — APP SETTINGS
+
+Admin controls for the live app.
+
+### Service Zone Settings:
+Current bounds: SW: 20.780, 73.190 NE: 20.920, 73.320
+
+[Edit Bounds] → lat/lng input fields [Save] → updates Firestore settings doc → Flutter app reads this
+
+
+
+### Fare Settings:
+GaamRide: Base fare: ₹ [20] Per km rate: ₹ [8] Minimum fare: ₹ [30] [Save Changes]
+
+GaamHaul: Booking commission: ₹ [75] [Save Changes]
+
+
+These save to Firestore `app_settings` collection.
+Flutter app reads from this collection so fare changes 
+take effect immediately without app update.
+
+### Notification Broadcast:
+Send message to all users: Title: [] Body: [] Target: [All] [Customers] [Saathi] [Haul Owners] [Send Notification]
+
+
+Uses Firebase Admin SDK to send FCM to all FCM tokens.
+
+### App Maintenance Mode:
+Maintenance Mode: [ OFF ] ←toggle When ON → Flutter app shows: "GaamRide હાળ અપડેટ થઈ રહ્યું છે. થોડી રાહ જુઓ."
+
+
+
+---
+
+## DESIGN SYSTEM
+
+### Colors:
+- Sidebar: #1A1A2E (dark navy)
+- Sidebar active: #2E7D32 (green)
+- GaamRide accent: #2E7D32 (green)
+- GaamHaul accent: #E65100 (orange)
+- Background: #F5F7FA
+- Card: #FFFFFF
+- Text: #212121
+- Muted text: #6B7280
+
+### Layout:
+- Sidebar: 240px fixed left
+- Top header: 60px with page title + admin name + logout
+- Content area: rest of screen, scrollable
+- Cards: white, rounded-lg, shadow-sm
+- Tables: striped rows, hover highlight
+
+### Responsive:
+- Desktop (>1024px): full sidebar always visible
+- Tablet (768-1024px): sidebar collapsible
+- Mobile (<768px): bottom nav with 4 main tabs
+
+---
+
+## REAL-TIME FEATURES
+
+Use Firestore onSnapshot for live updates on:
+1. Dashboard stats (rides count, users count)
+2. Live rides map (Saathi positions)
+3. Activity feed
+4. Active ride/haul status cards
+
+Do NOT poll. Use listeners everywhere.
+Unsubscribe listeners on component unmount.
+
+---
+
+## FILE STRUCTURE
+src/ components/ Sidebar.jsx Header.jsx StatsCard.jsx LiveMap.jsx RideCard.jsx HaulCard.jsx SaathiCard.jsx VehicleCard.jsx UserTable.jsx RevenueChart.jsx ActivityFeed.jsx
+
+pages/ Dashboard.jsx LiveRides.jsx AllSaathi.jsx RideHistory.jsx LiveHauls.jsx AllVehicles.jsx AllUsers.jsx VillageManager.jsx Revenue.jsx AppSettings.jsx Login.jsx AccessDenied.jsx
+
+services/ firebase.js ← Firebase config rideService.js ← Firestore ride queries saathiService.js ← Saathi queries haulService.js ← Haul queries userService.js ← User queries
+
+utils/ fareCalculator.js formatters.js ← date, currency formatting constants.js ← village list, colors
+
+App.jsx main.jsx
+
+
+
+---
+
+## IMPORTANT REQUIREMENTS
+
+1. Same Firebase project as Flutter app — reads same Firestore data
+2. Admin auth: Google login only, whitelist email check
+3. All Firestore queries optimized — use indexes, limit results
+4. Loading skeletons on every data fetch (not spinners)
+5. Empty states with helpful messages
+6. Confirm dialogs before destructive actions (block, delete)
+7. Toast notifications for all admin actions
+8. All monetary values formatted as ₹X,XXX
+9. All timestamps in IST (India Standard Time)
+10. Gujarati village names shown alongside English
+
+Build complete working code for all pages and components.
+Connect to Firebase using environment variables for config.
+Bro this GaamOps panel gives you full control of your entire business from one screen. You can see:
+
+Every live ride happening right now on the map
+Which Saathi is online in which village
+Your daily ₹75 commissions stacking up
+Block bad drivers instantly
+Change fares without app update

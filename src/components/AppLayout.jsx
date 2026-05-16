@@ -12,7 +12,7 @@ export default function AppLayout() {
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
       />
-      <div className="min-h-screen md:ml-64">
+      <div className="min-h-screen md:ml-60">
         <Topbar onToggleMobileMenu={() => setMobileSidebarOpen((prev) => !prev)} />
         <main className="p-6">
           <Outlet />

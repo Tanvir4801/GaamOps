@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
 } from 'firebase/auth'
 import { auth, isFirebaseConfigured } from '../firebase'
+import { ADMIN_EMAILS } from '../utils/constants'
 
 const AuthContext = createContext(null)
 
@@ -26,22 +28,27 @@ export function AuthProvider({ children }) {
     return unsubscribe
   }, [])
 
+  const isAdmin = useMemo(() => {
+    if (!user?.email) return false
+    return ADMIN_EMAILS.includes(user.email.toLowerCase())
+  }, [user])
+
   const value = useMemo(
     () => ({
       user,
       loading,
-      login: (email, password) => {
-        if (!auth) {
-          return Promise.reject(new Error('Firebase is not configured'))
-        }
-        return signInWithEmailAndPassword(auth, email, password)
+      isAdmin,
+      loginWithGoogle: () => {
+        if (!auth) return Promise.reject(new Error('Firebase is not configured'))
+        const provider = new GoogleAuthProvider()
+        return signInWithPopup(auth, provider)
       },
       logout: () => {
         if (!auth) return Promise.resolve()
         return signOut(auth)
       },
     }),
-    [loading, user],
+    [loading, user, isAdmin],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -49,8 +56,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext)
-  if (!ctx) {
-    throw new Error('useAuth must be used inside AuthProvider')
-  }
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
   return ctx
 }
