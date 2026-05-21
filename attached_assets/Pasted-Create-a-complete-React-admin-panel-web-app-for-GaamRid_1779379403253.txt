@@ -1,0 +1,518 @@
+Create a complete React admin panel web app for GaamRide — a rural ride-hailing and vehicle-booking app in Gujarat, India.
+
+STACK (do not deviate):
+- React 18 + Vite
+- Firebase v9 modular SDK (Firestore + Auth — NO Firebase Admin SDK)
+- React Router v6 (createBrowserRouter)
+- TailwindCSS v3 (CDN via index.html is fine)
+- react-hot-toast for all success/error messages
+- No Redux, no Zustand, no other UI library
+
+PROJECT STRUCTURE — create exactly these files:
+.
+├── index.html
+├── vite.config.js
+├── package.json
+├── .env                        ← user fills Firebase keys
+├── src/
+│   ├── main.jsx
+│   ├── App.jsx                 ← router root
+│   ├── firebase.js             ← init db + auth exports
+│   ├── hooks/
+│   │   ├── useCollection.js    ← real-time onSnapshot hook
+│   │   └── useDoc.js           ← real-time single doc hook
+│   ├── components/
+│   │   ├── Layout.jsx          ← sidebar shell
+│   │   ├── Sidebar.jsx         ← nav links
+│   │   ├── StatusBadge.jsx     ← colored pill
+│   │   ├── ConfirmModal.jsx    ← delete/block dialog
+│   │   ├── Spinner.jsx         ← loading state
+│   │   └── ProtectedRoute.jsx  ← auth guard
+│   └── pages/
+│       ├── Login.jsx
+│       ├── Dashboard.jsx
+│       ├── Users.jsx
+│       ├── Saathis.jsx
+│       ├── Rides.jsx
+│       ├── HaulBookings.jsx
+│       ├── HaulVehicles.jsx
+│       ├── Villages.jsx
+│       └── AppSettings.jsx
+
+DEPENDENCIES (package.json):
+{
+  "dependencies": {
+    "firebase": "^10.12.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-router-dom": "^6.23.0",
+    "react-hot-toast": "^2.4.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "vite": "^5.2.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0"
+  }
+}
+
+Start by scaffolding the full file tree with empty files, then implement each file completely.
+
+Now implement src/firebase.js and src/hooks/:
+
+=== src/firebase.js ===
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_API_KEY,
+  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_APP_ID
+};
+
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
+export const auth = getAuth(app);
+
+=== .env (template — user fills real values) ===
+VITE_API_KEY=your_api_key_here
+VITE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_PROJECT_ID=your_project_id
+VITE_STORAGE_BUCKET=your_project.appspot.com
+VITE_MESSAGING_SENDER_ID=123456789
+VITE_APP_ID=1:123:web:abc
+
+=== src/hooks/useCollection.js ===
+Real-time Firestore hook using onSnapshot.
+Signature: useCollection(collectionName, ...queryConstraints)
+Returns: { data: Array, loading: Boolean, error: String|null }
+- data items include the doc id as item.id
+- unsubscribes on unmount
+- catches errors and puts message in error state
+- loading starts true, goes false after first snapshot
+
+=== src/hooks/useDoc.js ===
+Real-time single document hook.
+Signature: useDoc(collectionName, docId)
+Returns: { data: Object|null, loading: Boolean, error: String|null }
+- Returns null data if doc doesn't exist
+- Same unsub + error pattern as useCollection
+
+FIRESTORE COLLECTIONS REFERENCE (memorize — used in ALL pages):
+  users/{uid}         → uid,name,displayName,phone,role,village,profilePhoto,fcmToken,isBlocked,createdAt,updatedAt
+  saathis/{uid}       → uid,name,phone,village,vehicleType,vehicleNumber,isAvailable,isOnline,isBlocked,position,lastSeen,rating,totalRides,fcmToken,createdAt,updatedAt
+  rides/{rideId}      → rideId,customerId,customerName,customerPhone,saathiId,saathiName,saathiPhone,pickupVillage,pickupLat,pickupLng,destinationVillage,destinationLat,destinationLng,status,fare,distance,otp,saathiLat,saathiLng,cancelReason,rating,createdAt,acceptedAt,startedAt,completedAt
+  haul_bookings/{id}  → bookingId,customerId,customerName,customerPhone,vehicleOwnerId,ownerName,ownerPhone,vehicleType,duration,durationHours,loadDescription,pickupVillage,pickupLat,pickupLng,status,appCommission,ownerEarnings,ownerLat,ownerLng,cancelReason,createdAt,acceptedAt,completedAt
+  haul_vehicles/{uid} → uid,ownerName,phone,village,vehicleType,capacity,ratePerHour,vehicleNumber,isAvailable,position,lastSeen,totalBookings,fcmToken,createdAt
+  villages/{id}       → name,nameGu,lat,lng,isActive,taluka  (id = lowercase village name e.g. "anaval")
+  app_settings/config → rideFareBase,rideFarePerKm,rideFareMinimum,rideFareMaximum,haulCommission,serviceZoneSW,serviceZoneNE,maintenanceMode,appVersion
+
+STATUS VALUES:
+  rides/haul_bookings: searching | accepted | arriving | started | completed | cancelled
+  saathis: isOnline true/false, isAvailable true/false, isBlocked true/false
+  users: isBlocked true/false, role: customer | saathi | both
+
+Implement auth, routing, and layout shell:
+
+=== src/pages/Login.jsx ===
+Centered card UI. Fields: Email, Password.
+On submit: signInWithEmailAndPassword(auth, email, password)
+On success: navigate('/dashboard')
+On error: toast.error(error.message)
+Show loading spinner on button while signing in.
+After login, persist auth state — user stays logged in on refresh.
+
+=== src/components/ProtectedRoute.jsx ===
+Uses onAuthStateChanged to check login.
+If loading: show full-page centered Spinner.
+If not logged in: 
+If logged in: render 
+
+=== src/App.jsx ===
+Use createBrowserRouter. Routes:
+  /login            → Login.jsx (no auth guard)
+  /                 → ProtectedRoute → Layout → redirect to /dashboard
+  /dashboard        → ProtectedRoute → Layout → Dashboard
+  /users            → ProtectedRoute → Layout → Users
+  /saathis          → ProtectedRoute → Layout → Saathis
+  /rides            → ProtectedRoute → Layout → Rides
+  /haul-bookings    → ProtectedRoute → Layout → HaulBookings
+  /haul-vehicles    → ProtectedRoute → Layout → HaulVehicles
+  /villages         → ProtectedRoute → Layout → Villages
+  /app-settings     → ProtectedRoute → Layout → AppSettings
+
+=== src/components/Layout.jsx ===
+Two-column layout: fixed sidebar (240px) + main content area.
+Top bar inside main: shows page title (from current route) + admin email (auth.currentUser.email) + logout button (signOut).
+On mobile (<768px): sidebar hidden, hamburger button toggles it as overlay.
+Sidebar has GaamRide logo text at top (bold, orange color #f97316).
+
+=== src/components/Sidebar.jsx ===
+Nav links with icons (use emoji or simple SVG — no icon library needed):
+  🏠 Dashboard      → /dashboard
+  👥 Users          → /users
+  🚗 Saathis        → /saathis
+  🛵 Rides          → /rides
+  🚛 Haul Bookings  → /haul-bookings
+  🏗️ Haul Vehicles  → /haul-vehicles
+  📍 Villages       → /villages
+  ⚙️ App Settings   → /app-settings
+Active link: orange bg (#fff7ed), orange text (#f97316), left border orange.
+Inactive: gray text, hover gray bg.
+
+=== src/components/StatusBadge.jsx ===
+Props: status (string)
+Returns a small rounded pill  with these exact colors:
+  searching  → yellow bg  (#fef9c3) yellow text (#854d0e)
+  accepted   → blue bg    (#dbeafe) blue text   (#1e40af)
+  arriving   → indigo bg  (#e0e7ff) indigo text (#3730a3)
+  started    → purple bg  (#f3e8ff) purple text (#6b21a8)
+  completed  → green bg   (#dcfce7) green text  (#166534)
+  cancelled  → red bg     (#fee2e2) red text    (#991b1b)
+  true/online/available → green bg/text
+  false/offline → gray bg (#f3f4f6) gray text (#374151)
+  blocked    → red bg/text
+
+=== src/components/ConfirmModal.jsx ===
+Props: isOpen, title, message, onConfirm, onCancel, confirmLabel="Delete", danger=true
+Full-screen overlay (bg-black/40). Centered white card.
+Title, message text, Cancel button + Confirm button (red if danger=true).
+Closes on overlay click (calls onCancel).
+
+=== src/components/Spinner.jsx ===
+Simple CSS spinner. Two sizes: default (24px) and fullPage (centered in viewport height).
+Implement src/pages/Dashboard.jsx:
+
+Use onSnapshot directly (not useCollection hook) for stat cards so each updates independently.
+
+STAT CARDS (2 rows × 3 cols on desktop, 2 cols on mobile):
+  1. Total Users        → count all docs in users collection
+  2. Total Saathis      → count all docs in saathis collection
+  3. Online Saathis     → saathis where isOnline == true
+  4. Active Rides       → rides where status in [searching, accepted, arriving, started]
+  5. Completed Today    → rides where status==completed AND completedAt >= today midnight
+  6. Haul Bookings      → count all docs in haul_bookings
+
+Each stat card:
+  - White bg, rounded-xl, shadow-sm, p-5
+  - Large number (text-3xl font-bold text-gray-800)
+  - Label below (text-sm text-gray-500)
+  - Colored left border accent (each card different color)
+  - Show Spinner while loading
+
+RECENT ACTIVITY (below stat cards):
+Two side-by-side tables (stack on mobile):
+
+Table 1 — Last 10 Rides (rides collection, orderBy createdAt desc, limit 10):
+  Columns: ID (first 8 chars), Customer, Pickup → Dest, Status, Fare (₹), Time
+  "Time" = createdAt.toDate().toLocaleString('en-IN')
+
+Table 2 — Last 10 Haul Bookings (haul_bookings, orderBy createdAt desc, limit 10):
+  Columns: ID (8 chars), Customer, Vehicle Type, Pickup Village, Status, Commission (₹75), Time
+
+Both tables:
+  - Horizontally scrollable on overflow
+  - Alternating row bg (white / gray-50)
+  - Status column uses 
+  - Firestore Timestamps: always check if field exists before calling .toDate()
+
+MAINTENANCE MODE BANNER:
+  Read app_settings/config doc with useDoc hook.
+  If maintenanceMode === true: show full-width red banner at top:
+  "⚠️ App is in maintenance mode. Users cannot book rides."
+  With a button "Disable" that sets maintenanceMode: false in Firestore.
+Implement src/pages/Users.jsx and src/pages/Saathis.jsx:
+
+=== Users.jsx ===
+Data: useCollection('users', orderBy('createdAt','desc'))
+
+HEADER ROW:
+  Left: "Users" heading + live count badge
+  Right: Search input (filter by name or phone, client-side)
+
+TABLE (overflow-x-auto wrapper):
+  Columns: Avatar+Name | Phone | Role | Village | Status | Created | Actions
+
+  Avatar: initials circle (first letter of name, colored bg based on role)
+  Role badge: customer=blue, saathi=purple, both=teal (use StatusBadge or inline styles)
+  Status: isBlocked ? red "Blocked" badge : green "Active" badge
+  Created: createdAt?.toDate().toLocaleDateString('en-IN') ?? '—'
+
+  Actions column (icon buttons with tooltips):
+    🚫 Block / ✅ Unblock → updateDoc users/{uid} { isBlocked: !current, updatedAt: serverTimestamp() }
+    🗑️ Delete → show ConfirmModal → deleteDoc users/{uid}
+    
+  IMPORTANT: NO "Add User" button. Users register via mobile app only.
+
+EMPTY STATE: "No users found" centered gray text + icon
+LOADING STATE: Spinner centered
+
+=== Saathis.jsx ===
+Data: useCollection('saathis', orderBy('createdAt','desc'))
+
+HEADER ROW:
+  Left: "Saathis" heading + count badge
+  Right: Search (name/phone/village) + Filter by vehicleType dropdown (All/bike/auto/cycle)
+
+TABLE (overflow-x-auto):
+  Columns: Name+Phone | Village | Vehicle | Online | Available | Rating | Rides | Blocked | Last Seen | Actions
+
+  Online column: green dot (●) if isOnline true, gray dot if false
+  Available: green dot if isAvailable true, gray if false
+  Rating: show stars e.g. "⭐ 4.8"
+  Last Seen: lastSeen?.toDate().toLocaleString('en-IN') ?? 'Never'
+
+  Actions:
+    Toggle isBlocked → updateDoc saathis/{uid} { isBlocked: !val, updatedAt: serverTimestamp() }
+    Toggle isAvailable (admin override) → updateDoc saathis/{uid} { isAvailable: !val, isOnline: !val }
+    Delete → ConfirmModal → deleteDoc saathis/{uid}
+
+  NO "Add Saathi" button. Saathis register via mobile app.
+
+BOTH PAGES — toast messages:
+  Success: toast.success('Updated successfully')
+  Error: toast.error('Error: ' + err.message)
+  Delete success: toast.success('Deleted successfully’)
+Implement src/pages/Rides.jsx and src/pages/HaulBookings.jsx and src/pages/HaulVehicles.jsx:
+
+=== Rides.jsx ===
+Data: useCollection('rides', orderBy('createdAt','desc'))
+
+FILTERS ROW:
+  - Status dropdown: All | searching | accepted | arriving | started | completed | cancelled
+  - Village filter: text input (filters on pickupVillage or destinationVillage)
+  - Date filter: date input (filters by createdAt date)
+  All filters client-side.
+
+TABLE columns:
+  Ride ID (first 8 chars of rideId) | Customer (name + phone) |
+  Saathi (saathiName or "Unassigned" in gray italic) |
+  Route (pickupVillage → destinationVillage) | Status | Fare (₹) | Distance (km) | OTP | Time | Actions
+
+Actions:
+  👁️ View → open detail modal (see below)
+  ❌ Cancel → only if status is searching/accepted/arriving/started
+    → updateDoc rides/{rideId} { status:'cancelled', cancelReason:'Admin cancelled' }
+    → ConfirmModal first: "Cancel this ride?"
+  🗑️ Delete → only if status is completed or cancelled
+    → ConfirmModal → deleteDoc rides/{rideId}
+
+DETAIL MODAL (slide-in or centered card):
+  Show ALL fields in a clean two-column grid:
+  Ride ID, Customer (name+phone), Saathi (name+phone or unassigned),
+  Pickup (village + lat/lng), Destination (village + lat/lng),
+  Saathi last location (saathiLat, saathiLng or "no data"),
+  Status, Fare, Distance, OTP, Rating,
+  Cancel Reason (if any),
+  createdAt, acceptedAt, startedAt, completedAt (each formatted or '—')
+
+=== HaulBookings.jsx ===
+Data: useCollection('haul_bookings', orderBy('createdAt','desc'))
+
+FILTERS: Status dropdown + date filter (client-side)
+
+TABLE columns:
+  Booking ID (8 chars) | Customer | Owner (ownerName or "Unassigned") |
+  Vehicle Type | Duration | Load Desc (truncate at 30 chars) |
+  Pickup Village | Status | Commission (always ₹75) | Owner Earnings (₹) | Time | Actions
+
+Actions:
+  👁️ View detail modal (all fields)
+  ❌ Cancel (if searching/accepted/started) → status='cancelled'
+  🗑️ Delete (if completed/cancelled) → deleteDoc
+
+=== HaulVehicles.jsx ===
+Data: useCollection('haul_vehicles', orderBy('createdAt','desc'))
+
+TABLE columns:
+  Owner Name | Phone | Village | Vehicle Type | Capacity | Rate/Hour (₹) |
+  Vehicle No | Available | Total Bookings | Actions
+
+Actions:
+  ✏️ Edit → modal with editable fields:
+    ownerName, phone, village (text), vehicleType (select: mini_tempo|pickup|tractor|truck_407),
+    capacity (text), ratePerHour (number), vehicleNumber, isAvailable (checkbox)
+    On save: updateDoc haul_vehicles/{uid} { ...fields, updatedAt: serverTimestamp() }
+  🗑️ Delete → ConfirmModal → deleteDoc
+
+➕ ADD VEHICLE BUTTON (top right of page — this IS allowed, admin manages vehicle owners):
+  Modal form fields:
+    uid* (Firebase Auth UID — text input, required, becomes doc ID)
+    ownerName*, phone*, village* (text),
+    vehicleType* (select: mini_tempo | pickup | tractor | truck_407),
+    capacity* (text e.g. "500kg"), ratePerHour* (number), vehicleNumber* (text),
+    isAvailable (checkbox, default true)
+  On submit:
+    setDoc(doc(db,'haul_vehicles', uid), {
+      uid, ownerName, phone, village, vehicleType, capacity,
+      ratePerHour: Number(ratePerHour), vehicleNumber, isAvailable,
+      totalBookings: 0, fcmToken: '', lastSeen: null,
+      createdAt: serverTimestamp()
+    })
+  toast.success on success, toast.error on failure
+  * = required field, validate before submit
+Implement src/pages/Villages.jsx and src/pages/AppSettings.jsx:
+
+=== Villages.jsx ===
+Data: useCollection('villages', orderBy('name','asc'))
+
+TABLE columns:
+  Doc ID | Name | Gujarati Name (nameGu) | Lat | Lng | Taluka | Active | Actions
+
+  Active column: green "Active" badge or gray "Inactive" badge (from isActive field)
+
+Actions:
+  ✏️ Edit → modal with all fields editable:
+    name, nameGu, lat (number), lng (number), taluka, isActive (checkbox)
+    WARNING text inside modal: "⚠️ Enter correct GPS coordinates only. Wrong coordinates break the app."
+    lat must be between 20.0 and 22.0, lng between 72.0 and 74.5 (validate + show error if out of range)
+    On save: updateDoc villages/{docId} { name, nameGu, lat, lng, taluka, isActive }
+  🔄 Toggle active → updateDoc villages/{id} { isActive: !current }
+  🗑️ Delete → ConfirmModal ("Delete village? This may break rides using this village.") → deleteDoc
+
+➕ ADD VILLAGE BUTTON:
+  Modal form:
+    name* (text), nameGu* (Gujarati text), lat* (number), lng* (number),
+    taluka* (text, default "Mahuva"), isActive (checkbox, default true)
+  Auto-generate doc ID: name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'')
+  Same lat/lng validation (20–22, 72–74.5)
+  On submit: setDoc(doc(db,'villages', generatedId), { name, nameGu, lat: Number(lat), lng: Number(lng), taluka, isActive })
+
+HARDCODED SEED BUTTON (one-time use):
+  Button "Seed 9 villages" → batch writes these correct villages if they don't exist:
+  anaval: {name:'Anaval',nameGu:'આણવલ',lat:20.8394,lng:73.2637,isActive:true,taluka:'Mahuva'}
+  kos: {name:'Kos',nameGu:'કૉસ',lat:20.8480,lng:73.2350,isActive:true,taluka:'Mahuva'}
+  tarkani: {name:'Tarkani',nameGu:'તારકણી',lat:20.8550,lng:73.2580,isActive:true,taluka:'Mahuva'}
+  angaldhara: {name:'Angaldhara',nameGu:'અંગળધરા',lat:20.8180,lng:73.2280,isActive:true,taluka:'Mahuva'}
+  dholikuva: {name:'Dholikuva',nameGu:'ઢોળીકૂવા',lat:20.8650,lng:73.2800,isActive:true,taluka:'Mahuva'}
+  lakhavadi: {name:'Lakhavadi',nameGu:'લખાવડી',lat:20.8050,lng:73.2150,isActive:true,taluka:'Mahuva'}
+  unai: {name:'Unai',nameGu:'ઉનાઈ',lat:20.8550,lng:73.2100,isActive:true,taluka:'Mahuva'}
+  doldha: {name:'Doldha',nameGu:'ડોળધા',lat:20.7950,lng:73.2600,isActive:true,taluka:'Mahuva'}
+  kamboya: {name:'Kamboya',nameGu:'કાંબોયા',lat:20.8750,lng:73.2200,isActive:true,taluka:'Mahuva'}
+
+=== AppSettings.jsx ===
+Data: useDoc('app_settings','config')
+
+LAYOUT: Single white card, full width, form inside.
+
+FORM SECTIONS:
+
+Section 1 — Ride Fare (grid 2 cols):
+  rideFareBase (number, label "Base fare ₹")
+  rideFarePerKm (number, label "Per km ₹")
+  rideFareMinimum (number, label "Minimum fare ₹")
+  rideFareMaximum (number, label "Maximum fare ₹")
+
+Section 2 — Haul Settings:
+  haulCommission (number, label "App commission ₹", note: "Fixed at ₹75 per booking")
+
+Section 3 — Service Zone:
+  serviceZoneSW.lat + serviceZoneSW.lng (label "South-West boundary")
+  serviceZoneNE.lat + serviceZoneNE.lng (label "North-East boundary")
+
+Section 4 — App Control:
+  maintenanceMode (toggle switch — large, red when on, shows "App is LIVE" / "MAINTENANCE MODE")
+  appVersion (text input)
+
+SAVE BUTTON: "Save Settings"
+  → setDoc(doc(db,'app_settings','config'), { all fields }, { merge: true })
+  → toast.success('Settings saved') or toast.error
+
+MAINTENANCE TOGGLE VISUAL:
+  When maintenanceMode is true → big red warning box:
+  "🔴 MAINTENANCE MODE IS ON — Users cannot book rides or see the app."
+
+On page load: populate form with existing Firestore values.
+Local state for form, only write to Firestore on Save click.
+GLOBAL UI AND CODE RULES — apply to every file:
+
+TAILWIND DESIGN SYSTEM:
+  Primary color: orange (#f97316 = orange-500)
+  Sidebar bg: white, border-r border-gray-100
+  Page bg: bg-gray-50
+  Cards: bg-white rounded-xl shadow-sm border border-gray-100 p-6
+  Buttons primary: bg-orange-500 text-white hover:bg-orange-600 rounded-lg px-4 py-2 text-sm
+  Buttons danger: bg-red-500 text-white hover:bg-red-600
+  Buttons secondary: bg-white border border-gray-200 text-gray-700 hover:bg-gray-50
+  Table header: bg-gray-50 text-xs uppercase tracking-wide text-gray-500
+  Table rows: text-sm, hover:bg-gray-50, divide-y divide-gray-100
+  Inputs: border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-300 outline-none
+  Modal overlay: fixed inset-0 bg-black/40 z-50 flex items-center justify-center
+  Modal card: bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto
+
+TIMESTAMP HANDLING (critical — do this everywhere):
+  Never call .toDate() directly without checking:
+  const formatDate = (ts) => {
+    if (!ts) return '—';
+    if (ts?.toDate) return ts.toDate().toLocaleString('en-IN');
+    if (ts instanceof Date) return ts.toLocaleString('en-IN');
+    return '—';
+  }
+
+MONEY FORMATTING:
+  const formatMoney = (n) => n != null ? '₹' + Number(n).toLocaleString('en-IN') : '—'
+
+REAL-TIME DATA RULES:
+  - ALL lists use onSnapshot (via useCollection hook) — no .getDocs() for displayed lists
+  - Only use .getDoc()/.getDocs() for one-off lookups inside event handlers
+  - Unsubscribe all listeners in useEffect cleanup
+
+ERROR HANDLING:
+  Every Firestore write wrapped in try/catch:
+  try {
+    await updateDoc(...)
+    toast.success('Updated successfully')
+  } catch(err) {
+    toast.error('Error: ' + err.message)
+  }
+
+LOADING + EMPTY STATES (required on every page):
+  Loading: 
+
+  Empty: 
+No records found
+
+
+MOBILE RESPONSIVE:
+  All tables wrapped: 
+
+  Sidebar collapses to off-screen on md:hidden, hamburger toggle shows it
+  Stat cards: grid-cols-2 md:grid-cols-3
+  Modals: w-full max-w-lg mx-4
+
+FIRESTORE SECURITY REMINDER (add comment in firebase.js):
+  // IMPORTANT: Set Firestore rules to allow only authenticated admin users.
+  // In Firebase Console → Firestore → Rules:
+  // rules_version = '2';
+  // service cloud.firestore {
+  //   match /databases/{database}/documents {
+  //     match /{document=**} {
+  //       allow read, write: if request.auth != null;
+  //     }
+  //   }
+  // }
+
+WHAT NOT TO DO:
+  - Never add mock/fake data
+  - Never use localStorage for Firestore data
+  - Never call .toDate() without null check
+  - Never use alert() — use toast instead
+  - Never hardcode Firebase config — use .env variables
+  - No "Add User" or "Add Saathi" pages (they come from mobile app)
+  - No Redux, Context API for data (Firebase hooks only)
+  - No class components — functional + hooks only
+
+FINAL CHECK BEFORE DONE:
+  ✅ Login page works with Firebase Auth
+  ✅ All 8 pages accessible after login
+  ✅ All tables show real-time data
+  ✅ All CRUD actions work with toast feedback
+  ✅ Mobile responsive
+  ✅ No console errors on load
+  ✅ .env file has placeholder keys with instructions
+
