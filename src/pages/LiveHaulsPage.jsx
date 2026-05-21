@@ -1,183 +1,176 @@
-import { collection, onSnapshot } from 'firebase/firestore'
-import { useEffect, useMemo, useState } from 'react'
-import { MapPin, Truck, Navigation } from 'lucide-react'
+import { useState } from 'react'
+import { doc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore'
+import toast from 'react-hot-toast'
 import { db } from '../firebase'
-import { toDate, formatTimeAgo, firstNonEmpty } from '../utils/formatters'
-import { VILLAGES } from '../utils/constants'
-import EmptyTableState from '../components/EmptyTableState'
+import { useCollection } from '../hooks/useCollection.js'
+import StatusBadge from '../components/StatusBadge.jsx'
+import ConfirmModal from '../components/ConfirmModal.jsx'
+import Spinner from '../components/Spinner.jsx'
 
-const STATUS_CONFIG = {
-  searching: { label: 'Searching', dot: 'bg-blue-500', card: 'border-blue-200 bg-blue-50' },
-  accepted: { label: 'Accepted', dot: 'bg-amber-400', card: 'border-amber-200 bg-amber-50' },
-  started: { label: 'In Progress', dot: 'bg-orange-500', card: 'border-orange-200 bg-haul/5' },
-  completed: { label: 'Completed', dot: 'bg-green-500', card: 'border-green-200 bg-green-50' },
-  cancelled: { label: 'Cancelled', dot: 'bg-rose-500', card: 'border-rose-200 bg-rose-50' },
+const formatDate = (ts) => {
+  if (!ts) return '—'
+  if (ts?.toDate) return ts.toDate().toLocaleString('en-IN')
+  if (ts instanceof Date) return ts.toLocaleString('en-IN')
+  return '—'
 }
+const formatMoney = (n) => (n != null ? '₹' + Number(n).toLocaleString('en-IN') : '—')
 
-function StatusPill({ status }) {
-  const s = String(status || '').toLowerCase()
-  const cfg = STATUS_CONFIG[s] || { label: status || '—', dot: 'bg-slate-300' }
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold">
-      <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
-      {cfg.label}
-    </span>
-  )
-}
-
-function HaulCard({ haul, selected, onClick }) {
-  const s = String(haul.status || '').toLowerCase()
-  const cfg = STATUS_CONFIG[s] || { card: 'border-slate-200 bg-white' }
-  const from = firstNonEmpty(haul.pickupVillage, haul.pickupLocation, haul.fromVillage) || '?'
-  const farmer = firstNonEmpty(haul.customerName, haul.userName, haul.farmerName) || 'Farmer'
-  const vehicle = firstNonEmpty(haul.vehicleOwnerName, haul.driverName, haul.vehicleType) || 'Vehicle'
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full rounded-xl border-2 p-4 text-left transition hover:shadow-md ${
-        selected ? 'ring-2 ring-haul ring-offset-1' : ''
-      } ${cfg.card}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-slate-800 text-sm">Haul #{haul.id?.slice(-5).toUpperCase()}</p>
-          <p className="text-xs text-slate-500 mt-0.5">Farmer: {farmer}</p>
-        </div>
-        <StatusPill status={haul.status} />
-      </div>
-      <div className="mt-2.5 flex items-center gap-1.5 text-xs text-slate-500">
-        <Truck size={12} className="text-haul" />
-        <span>{vehicle}</span>
-      </div>
-      <div className="mt-2 flex items-center gap-1.5 text-sm">
-        <MapPin size={13} className="text-haul flex-shrink-0" />
-        <span className="text-slate-600 truncate">{from}</span>
-      </div>
-      {haul.load && (
-        <div className="mt-1.5 text-xs text-slate-500">Load: {haul.load}</div>
-      )}
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-sm font-bold text-haul">₹75 commission</span>
-        <span className="text-xs text-slate-400">{formatTimeAgo(haul.timestamp || haul.createdAt)}</span>
-      </div>
-    </button>
-  )
-}
-
-function MapPlaceholder({ hauls }) {
-  return (
-    <div className="relative h-full min-h-[400px] rounded-xl bg-orange-50 flex flex-col items-center justify-center overflow-hidden border border-orange-200">
-      <div className="relative text-center px-6">
-        <div className="text-5xl mb-3">🚛</div>
-        <h3 className="font-bold text-slate-700">Live Haul Map — Mahuva Taluka</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Add <code className="rounded bg-slate-200 px-1 text-xs">VITE_GOOGLE_MAPS_KEY</code> to enable live tracking
-        </p>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-          {VILLAGES.slice(0, 6).map((v) => (
-            <div key={v.id} className="rounded-lg bg-white px-2 py-1.5 shadow-sm">
-              <span className="font-semibold text-haul">{v.gujarati}</span>
-              <p className="text-slate-400">{v.name}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-500">
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-orange-400" />Farmer</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-haul" />Vehicle</span>
-        </div>
-      </div>
-      {hauls.length > 0 && (
-        <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-          {hauls.slice(0, 4).map((haul) => (
-            <div key={haul.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 shadow-sm text-xs">
-              <span className={`h-2 w-2 rounded-full ${STATUS_CONFIG[String(haul.status || '').toLowerCase()]?.dot || 'bg-slate-300'}`} />
-              <span className="font-medium">{firstNonEmpty(haul.pickupVillage, haul.fromVillage) || '?'}</span>
-              <Navigation size={10} className="text-slate-400" />
-              <span>{haul.vehicleType || 'Tempo'}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-const FILTERS = ['all', 'searching', 'accepted', 'started', 'completed', 'cancelled']
+const ACTIVE_STATUSES = ['searching', 'accepted', 'started']
 
 export default function LiveHaulsPage() {
-  const [bookings, setBookings] = useState([])
-  const [filter, setFilter] = useState('all')
-  const [villageFilter, setVillageFilter] = useState('all')
-  const [selectedId, setSelectedId] = useState(null)
+  const { data: hauls, loading } = useCollection('haul_bookings', orderBy('createdAt', 'desc'))
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('')
+  const [detail, setDetail] = useState(null)
+  const [confirm, setConfirm] = useState(null)
+  const [cancelConfirm, setCancelConfirm] = useState(null)
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'haul_bookings'), (snap) =>
-      setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    )
-    return () => unsub()
-  }, [])
+  const filtered = hauls.filter((h) => {
+    const matchStatus = statusFilter === 'all' || h.status === statusFilter
+    const matchDate = !dateFilter || (() => {
+      const d = h.createdAt?.toDate ? h.createdAt.toDate() : null
+      return d ? d.toISOString().slice(0, 10) === dateFilter : false
+    })()
+    return matchStatus && matchDate
+  })
 
-  const activeHauls = useMemo(() =>
-    bookings.filter((b) => ['searching', 'accepted', 'started'].includes(String(b.status || '').toLowerCase())),
-    [bookings])
+  const handleCancel = async (h) => {
+    try {
+      await updateDoc(doc(db, 'haul_bookings', h.id), { status: 'cancelled', cancelReason: 'Admin cancelled' })
+      toast.success('Booking cancelled')
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    }
+    setCancelConfirm(null)
+  }
 
-  const filtered = useMemo(() =>
-    [...bookings]
-      .filter((b) => {
-        const matchStatus = filter === 'all' || String(b.status || '').toLowerCase() === filter
-        const matchVillage = villageFilter === 'all' || b.pickupVillage === villageFilter || b.fromVillage === villageFilter
-        return matchStatus && matchVillage
-      })
-      .sort((a, b) => (toDate(b.timestamp || b.createdAt)?.getTime() || 0) - (toDate(a.timestamp || a.createdAt)?.getTime() || 0)),
-    [bookings, filter, villageFilter])
+  const handleDelete = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'haul_bookings', id))
+      toast.success('Deleted successfully')
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    }
+    setConfirm(null)
+  }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition capitalize ${
-                filter === f ? 'bg-haul text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {f === 'all' ? `All (${bookings.length})` : f}
-            </button>
-          ))}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-bold text-gray-800">Haul Bookings</h1>
+          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">{filtered.length}</span>
         </div>
-        <select className="input ml-auto max-w-[180px]" value={villageFilter} onChange={(e) => setVillageFilter(e.target.value)}>
-          <option value="all">All Villages</option>
-          {VILLAGES.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
-        </select>
-        <div className="flex items-center gap-2 rounded-lg bg-haul/10 px-3 py-1.5">
-          <span className="h-2 w-2 rounded-full bg-haul animate-pulse" />
-          <span className="text-xs font-semibold text-haul">{activeHauls.length} Active</span>
+        <div className="flex flex-wrap gap-2">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300">
+            <option value="all">All Statuses</option>
+            {['searching','accepted','started','completed','cancelled'].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-        <div className="space-y-3 lg:col-span-2 max-h-[700px] overflow-y-auto pr-1">
-          {filtered.length === 0 && (
-            <EmptyTableState message="No haul bookings found." />
-          )}
-          {filtered.map((haul) => (
-            <HaulCard
-              key={haul.id}
-              haul={haul}
-              selected={selectedId === haul.id}
-              onClick={() => setSelectedId(haul.id === selectedId ? null : haul.id)}
-            />
-          ))}
-        </div>
-        <div className="lg:col-span-3">
-          <MapPlaceholder hauls={activeHauls} />
-        </div>
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+        {loading ? (
+          <div className="flex justify-center p-10"><Spinner /></div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 p-10 text-gray-400">
+            <span className="text-3xl">🚛</span>
+            <p className="text-sm">No records found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  {['Booking ID','Customer','Owner','Vehicle','Duration','Load','Pickup','Status','Commission','Owner Earnings','Time','Actions'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map((h, i) => (
+                  <tr key={h.id} className={`hover:bg-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{(h.bookingId || h.id).slice(0,8)}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{h.customerName || '—'}</p>
+                      <p className="text-xs text-gray-400">{h.customerPhone || ''}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {h.ownerName ? (
+                        <>
+                          <p>{h.ownerName}</p>
+                          <p className="text-xs text-gray-400">{h.ownerPhone}</p>
+                        </>
+                      ) : <span className="italic text-gray-400">Unassigned</span>}
+                    </td>
+                    <td className="px-4 py-3 capitalize">{h.vehicleType || '—'}</td>
+                    <td className="px-4 py-3 text-xs">{h.durationHours ? `${h.durationHours}h` : (h.duration || '—')}</td>
+                    <td className="px-4 py-3 text-xs max-w-[120px] truncate" title={h.loadDescription}>{h.loadDescription?.slice(0,30) || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{h.pickupVillage || '—'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={h.status} /></td>
+                    <td className="px-4 py-3 text-xs">₹75</td>
+                    <td className="px-4 py-3 text-xs">{formatMoney(h.ownerEarnings)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{formatDate(h.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button type="button" title="View" onClick={() => setDetail(h)} className="rounded p-1 hover:bg-gray-100">👁️</button>
+                        {ACTIVE_STATUSES.includes(h.status) && (
+                          <button type="button" title="Cancel" onClick={() => setCancelConfirm(h)} className="rounded p-1 hover:bg-orange-50">❌</button>
+                        )}
+                        {['completed','cancelled'].includes(h.status) && (
+                          <button type="button" title="Delete" onClick={() => setConfirm(h)} className="rounded p-1 hover:bg-red-50">🗑️</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDetail(null)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-800">Booking Details</h3>
+              <button type="button" onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              {[
+                ['Booking ID', detail.bookingId || detail.id],
+                ['Status', <StatusBadge key="s" status={detail.status} />],
+                ['Customer', `${detail.customerName || '—'} (${detail.customerPhone || '—'})`],
+                ['Owner', detail.ownerName ? `${detail.ownerName} (${detail.ownerPhone})` : 'Unassigned'],
+                ['Vehicle Type', detail.vehicleType || '—'],
+                ['Duration', detail.durationHours ? `${detail.durationHours}h` : (detail.duration || '—')],
+                ['Load', detail.loadDescription || '—'],
+                ['Pickup', `${detail.pickupVillage} (${detail.pickupLat}, ${detail.pickupLng})`],
+                ['Commission', '₹75'],
+                ['Owner Earnings', formatMoney(detail.ownerEarnings)],
+                ['Cancel Reason', detail.cancelReason || '—'],
+                ['Created', formatDate(detail.createdAt)],
+                ['Accepted', formatDate(detail.acceptedAt)],
+                ['Completed', formatDate(detail.completedAt)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+                  <p className="mt-0.5 text-gray-700">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal isOpen={!!cancelConfirm} title="Cancel this booking?" message="Status will be set to cancelled." onConfirm={() => handleCancel(cancelConfirm)} onCancel={() => setCancelConfirm(null)} confirmLabel="Cancel Booking" />
+      <ConfirmModal isOpen={!!confirm} title="Delete booking?" message="This will permanently delete this record." onConfirm={() => handleDelete(confirm?.id)} onCancel={() => setConfirm(null)} />
     </div>
   )
 }

@@ -1,299 +1,167 @@
-import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore'
-import { useEffect, useMemo, useState } from 'react'
-import { X, Phone, MapPin, Star, Bike, Clock } from 'lucide-react'
+import { useState } from 'react'
+import { doc, updateDoc, deleteDoc, serverTimestamp, orderBy } from 'firebase/firestore'
+import toast from 'react-hot-toast'
 import { db } from '../firebase'
-import { toDate, formatDate, formatDateOnly } from '../utils/formatters'
-import { VILLAGES, VEHICLE_TYPES } from '../utils/constants'
-import Toast, { useToast } from '../components/Toast'
-import ConfirmDialog from '../components/ConfirmDialog'
-import { SkeletonRows } from '../components/SkeletonRow'
-import EmptyTableState from '../components/EmptyTableState'
+import { useCollection } from '../hooks/useCollection.js'
+import StatusBadge from '../components/StatusBadge.jsx'
+import ConfirmModal from '../components/ConfirmModal.jsx'
+import Spinner from '../components/Spinner.jsx'
 
-function StatusDot({ status }) {
-  const s = String(status || '').toLowerCase()
-  if (s === 'active') return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600"><span className="h-2 w-2 rounded-full bg-green-500" />Online</span>
-  if (s === 'blocked') return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600"><span className="h-2 w-2 rounded-full bg-rose-500" />Blocked</span>
-  if (s === 'pending') return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600"><span className="h-2 w-2 rounded-full bg-amber-400" />Pending</span>
-  return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-slate-300" />Offline</span>
-}
-
-function VehicleBadge({ type }) {
-  const t = String(type || '').toLowerCase()
-  const color = t.includes('auto') ? 'badge-green' : t.includes('bike') ? 'badge-blue' : t.includes('tempo') || t.includes('truck') ? 'badge-orange' : 'badge-gray'
-  return <span className={`badge ${color}`}>{type || '—'}</span>
-}
-
-function SaathiModal({ driver, bookings, onClose, onBlock, onUnblock }) {
-  if (!driver) return null
-  const totalRides = bookings.filter((b) => b.assignedDriverId === driver.id || b.driverId === driver.id).length
-  const completedRides = bookings.filter((b) =>
-    (b.assignedDriverId === driver.id || b.driverId === driver.id) &&
-    String(b.status || '').toLowerCase() === 'completed'
-  )
-  const totalEarnings = completedRides.reduce((s, b) => s + Number(b.fare || b.amount || 0), 0)
-  const recentRides = completedRides.slice(-5).reverse()
-  const isBlocked = String(driver.status || '').toLowerCase() === 'blocked'
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between p-6 border-b border-slate-100">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-xl font-bold text-white">
-              {(driver.name || driver.fullName || 'S').charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-800">{driver.name || driver.fullName || '—'}</h3>
-              <p className="text-sm text-slate-500">{driver.phone || driver.phoneNumber || '—'}</p>
-              <StatusDot status={driver.status} />
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 hover:bg-slate-100">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4">
-          {[
-            { label: 'Village', value: driver.village || '—', icon: <MapPin size={14} /> },
-            { label: 'Vehicle', value: driver.vehicle || driver.vehicleType || '—', icon: <Bike size={14} /> },
-            { label: 'Total Rides', value: totalRides, icon: <Star size={14} /> },
-            { label: 'Earnings (est.)', value: `₹${totalEarnings.toLocaleString('en-IN')}`, icon: null },
-          ].map((item) => (
-            <div key={item.label} className="rounded-lg bg-slate-50 p-3">
-              <p className="flex items-center gap-1 text-xs text-slate-500">{item.icon}{item.label}</p>
-              <p className="mt-0.5 font-bold text-slate-800">{item.value}</p>
-            </div>
-          ))}
-        </div>
-
-        {recentRides.length > 0 && (
-          <div className="px-6 pb-4">
-            <h4 className="mb-2 text-sm font-bold text-slate-700">Recent Completed Rides</h4>
-            <div className="space-y-1.5">
-              {recentRides.map((ride) => (
-                <div key={ride.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                  <span className="text-slate-600">
-                    {ride.pickupVillage || ride.fromVillage || '?'} → {ride.dropLocation || ride.toVillage || '?'}
-                  </span>
-                  <span className="font-semibold text-brand">₹{ride.fare || ride.amount || 0}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-3 border-t border-slate-100 p-6">
-          {isBlocked ? (
-            <button type="button" onClick={() => onUnblock(driver)} className="btn-primary flex-1">
-              Unblock Saathi
-            </button>
-          ) : (
-            <button type="button" onClick={() => onBlock(driver)} className="btn-danger flex-1">
-              Block Saathi
-            </button>
-          )}
-          {driver.phone && (
-            <a
-              href={`https://wa.me/91${driver.phone}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary flex items-center gap-2"
-            >
-              <Phone size={14} /> WhatsApp
-            </a>
-          )}
-          <button type="button" onClick={onClose} className="btn-secondary">Close</button>
-        </div>
-      </div>
-    </div>
-  )
+const formatDate = (ts) => {
+  if (!ts) return 'Never'
+  if (ts?.toDate) return ts.toDate().toLocaleString('en-IN')
+  if (ts instanceof Date) return ts.toLocaleString('en-IN')
+  return '—'
 }
 
 export default function AllSaathiPage() {
-  const [drivers, setDrivers] = useState([])
-  const [bookings, setBookings] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: saathis, loading } = useCollection('saathis', orderBy('createdAt', 'desc'))
   const [search, setSearch] = useState('')
-  const [villageFilter, setVillageFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
   const [vehicleFilter, setVehicleFilter] = useState('all')
-  const [selectedDriver, setSelectedDriver] = useState(null)
   const [confirm, setConfirm] = useState(null)
-  const { toast, showToast } = useToast()
 
-  useEffect(() => {
-    const unsubs = [
-      onSnapshot(collection(db, 'saathi'), (snap) => {
-        setDrivers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-        setLoading(false)
-      }),
-      onSnapshot(collection(db, 'bookings'), (snap) =>
-        setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      ),
-    ]
-    return () => unsubs.forEach((u) => u())
-  }, [])
+  const filtered = saathis.filter((s) => {
+    const q = search.toLowerCase()
+    const matchSearch = !q ||
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.phone || '').includes(q) ||
+      (s.village || '').toLowerCase().includes(q)
+    const matchVehicle = vehicleFilter === 'all' || s.vehicleType === vehicleFilter
+    return matchSearch && matchVehicle
+  })
 
-  const filtered = useMemo(() =>
-    drivers.filter((d) => {
-      const q = search.trim().toLowerCase()
-      const name = String(d.name || d.fullName || '').toLowerCase()
-      const phone = String(d.phone || d.phoneNumber || '').toLowerCase()
-      const matchSearch = !q || name.includes(q) || phone.includes(q)
-      const matchVillage = villageFilter === 'all' || d.village === villageFilter
-      const matchStatus = statusFilter === 'all' || String(d.status || '').toLowerCase() === statusFilter
-      const matchVehicle = vehicleFilter === 'all' || String(d.vehicle || d.vehicleType || '').toLowerCase().includes(vehicleFilter.toLowerCase())
-      return matchSearch && matchVillage && matchStatus && matchVehicle
-    }), [drivers, search, villageFilter, statusFilter, vehicleFilter])
-
-  const updateStatus = async (driverId, status) => {
-    await updateDoc(doc(db, 'saathi', driverId), { status })
-    showToast(`Saathi ${status === 'blocked' ? 'blocked' : 'unblocked'} successfully`)
-    setSelectedDriver(null)
+  const handleToggleBlock = async (s) => {
+    try {
+      await updateDoc(doc(db, 'saathis', s.id), {
+        isBlocked: !s.isBlocked,
+        updatedAt: serverTimestamp(),
+      })
+      toast.success('Updated successfully')
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    }
   }
 
-  const handleBlock = (driver) => {
-    setConfirm({
-      driver,
-      action: 'block',
-      title: 'Block Saathi',
-      message: `Are you sure you want to block ${driver.name || 'this Saathi'}? They won't be able to go online in the app.`,
-    })
+  const handleToggleAvailable = async (s) => {
+    try {
+      await updateDoc(doc(db, 'saathis', s.id), {
+        isAvailable: !s.isAvailable,
+        isOnline: !s.isAvailable,
+        updatedAt: serverTimestamp(),
+      })
+      toast.success('Updated successfully')
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    }
   }
 
-  const handleUnblock = (driver) => {
-    setConfirm({
-      driver,
-      action: 'unblock',
-      title: 'Unblock Saathi',
-      message: `Unblock ${driver.name || 'this Saathi'} and restore their access?`,
-      danger: false,
-    })
-  }
-
-  const handleConfirm = async () => {
-    if (!confirm) return
-    await updateStatus(confirm.driver.id, confirm.action === 'block' ? 'blocked' : 'active')
+  const handleDelete = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'saathis', id))
+      toast.success('Deleted successfully')
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    }
     setConfirm(null)
   }
 
+  const Dot = ({ on }) => (
+    <span className={`text-lg ${on ? 'text-green-500' : 'text-gray-300'}`}>●</span>
+  )
+
   return (
-    <div className="space-y-5">
-      <Toast show={toast.show} message={toast.message} type={toast.type} />
-      <ConfirmDialog
-        open={!!confirm}
-        title={confirm?.title}
-        message={confirm?.message}
-        danger={confirm?.danger !== false}
-        confirmLabel={confirm?.action === 'block' ? 'Block' : 'Unblock'}
-        onConfirm={handleConfirm}
-        onCancel={() => setConfirm(null)}
-      />
-      {selectedDriver && (
-        <SaathiModal
-          driver={selectedDriver}
-          bookings={bookings}
-          onClose={() => setSelectedDriver(null)}
-          onBlock={handleBlock}
-          onUnblock={handleUnblock}
-        />
-      )}
-
-      <div className="flex flex-wrap gap-3">
-        <input
-          type="text" className="input min-w-[220px]" placeholder="Search by name or phone"
-          value={search} onChange={(e) => setSearch(e.target.value)}
-        />
-        <select className="input min-w-[160px]" value={villageFilter} onChange={(e) => setVillageFilter(e.target.value)}>
-          <option value="all">All Villages</option>
-          {VILLAGES.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
-        </select>
-        <select className="input min-w-[140px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="pending">Pending</option>
-          <option value="blocked">Blocked</option>
-          <option value="deactivated">Deactivated</option>
-        </select>
-        <select className="input min-w-[140px]" value={vehicleFilter} onChange={(e) => setVehicleFilter(e.target.value)}>
-          <option value="all">All Vehicles</option>
-          {VEHICLE_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
-        </select>
-        <span className="ml-auto self-center text-sm text-slate-500">{filtered.length} Saathi</span>
-      </div>
-
-      <div className="panel-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Name</th>
-                <th className="px-4 py-3 font-semibold">Phone</th>
-                <th className="px-4 py-3 font-semibold">Village</th>
-                <th className="px-4 py-3 font-semibold">Vehicle</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Joined</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <SkeletonRows count={6} cols={7} />}
-              {!loading && filtered.map((driver) => (
-                <tr key={driver.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand/20 text-xs font-bold text-brand">
-                        {(driver.name || driver.fullName || 'S').charAt(0).toUpperCase()}
-                      </div>
-                      <span className="font-medium text-slate-800">{driver.name || driver.fullName || '—'}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{driver.phone || driver.phoneNumber || '—'}</td>
-                  <td className="px-4 py-3 text-slate-600">{driver.village || '—'}</td>
-                  <td className="px-4 py-3"><VehicleBadge type={driver.vehicle || driver.vehicleType} /></td>
-                  <td className="px-4 py-3"><StatusDot status={driver.status} /></td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">
-                    {formatDateOnly(driver.registeredAt || driver.createdAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                        onClick={() => setSelectedDriver(driver)}
-                      >View</button>
-                      {String(driver.status || '').toLowerCase() === 'blocked' ? (
-                        <button
-                          type="button"
-                          className="rounded-md bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 hover:bg-green-200"
-                          onClick={() => handleUnblock(driver)}
-                        >Unblock</button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="rounded-md bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
-                          onClick={() => handleBlock(driver)}
-                        >Block</button>
-                      )}
-                      {String(driver.status || '').toLowerCase() === 'pending' && (
-                        <button
-                          type="button"
-                          className="rounded-md bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand hover:bg-brand/20"
-                          onClick={() => updateDoc(doc(db, 'saathi', driver.id), { status: 'active' }).then(() => showToast('Saathi approved!'))}
-                        >Approve</button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!loading && filtered.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-2"><EmptyTableState message="No Saathi found." /></td></tr>
-              )}
-            </tbody>
-          </table>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-bold text-gray-800">Saathis</h1>
+          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
+            {filtered.length}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, phone, village…"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300 sm:w-56"
+          />
+          <select
+            value={vehicleFilter}
+            onChange={(e) => setVehicleFilter(e.target.value)}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+          >
+            <option value="all">All Vehicles</option>
+            <option value="bike">Bike</option>
+            <option value="auto">Auto</option>
+            <option value="cycle">Cycle</option>
+          </select>
         </div>
       </div>
+
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+        {loading ? (
+          <div className="flex justify-center p-10"><Spinner /></div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 p-10 text-gray-400">
+            <span className="text-3xl">🚗</span>
+            <p className="text-sm">No records found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  {['Name & Phone', 'Village', 'Vehicle', 'Online', 'Available', 'Rating', 'Rides', 'Blocked', 'Last Seen', 'Actions'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map((s, i) => (
+                  <tr key={s.id} className={`hover:bg-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-800">{s.name || '—'}</p>
+                      <p className="text-xs text-gray-400">{s.phone || '—'}</p>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{s.village || '—'}</td>
+                    <td className="px-4 py-3 capitalize text-gray-600">{s.vehicleType || '—'}</td>
+                    <td className="px-4 py-3"><Dot on={s.isOnline} /></td>
+                    <td className="px-4 py-3"><Dot on={s.isAvailable} /></td>
+                    <td className="px-4 py-3">⭐ {s.rating ?? '—'}</td>
+                    <td className="px-4 py-3">{s.totalRides ?? 0}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={s.isBlocked ? 'blocked' : 'active'} />
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{formatDate(s.lastSeen)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button type="button" title={s.isBlocked ? 'Unblock' : 'Block'} onClick={() => handleToggleBlock(s)} className="rounded p-1 hover:bg-gray-100">
+                          {s.isBlocked ? '✅' : '🚫'}
+                        </button>
+                        <button type="button" title="Toggle Availability" onClick={() => handleToggleAvailable(s)} className="rounded p-1 hover:bg-gray-100">
+                          {s.isAvailable ? '🔴' : '🟢'}
+                        </button>
+                        <button type="button" title="Delete" onClick={() => setConfirm(s)} className="rounded p-1 hover:bg-red-50">
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <ConfirmModal
+        isOpen={!!confirm}
+        title="Delete Saathi?"
+        message={`This will permanently delete "${confirm?.name || confirm?.id}".`}
+        onConfirm={() => handleDelete(confirm?.id)}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   )
 }

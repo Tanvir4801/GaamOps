@@ -1,27 +1,21 @@
-import { Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { ADMIN_EMAILS } from '../utils/constants'
+import { useEffect, useState } from 'react'
+import { Navigate } from 'react-router-dom'
+import { onAuthStateChanged } from 'firebase/auth'
+import { auth } from '../firebase'
+import Spinner from './Spinner.jsx'
 
 export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
-  const location = useLocation()
+  const [user, setUser] = useState(undefined)
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-sidebar">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand border-t-transparent" />
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (!auth) {
+      setUser(null)
+      return
+    }
+    return onAuthStateChanged(auth, (u) => setUser(u))
+  }, [])
 
-  if (!user) {
-    return <Navigate to="/login" replace state={{ from: location }} />
-  }
-
-  const isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase())
-  if (!isAdmin) {
-    return <Navigate to="/login" replace />
-  }
-
+  if (user === undefined) return <Spinner fullPage />
+  if (!user) return <Navigate to="/login" replace />
   return children
 }

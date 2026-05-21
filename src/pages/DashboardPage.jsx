@@ -1,287 +1,191 @@
-import { collection, onSnapshot } from 'firebase/firestore'
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from 'recharts'
+  collection, onSnapshot, query, where, orderBy, limit, Timestamp, doc, updateDoc,
+} from 'firebase/firestore'
 import { db } from '../firebase'
-import { toDate, formatCurrency, isSameDay, formatTimeAgo, firstNonEmpty } from '../utils/formatters'
-import { VILLAGES } from '../utils/constants'
+import { useDoc } from '../hooks/useDoc.js'
+import { useCollection } from '../hooks/useCollection.js'
+import StatusBadge from '../components/StatusBadge.jsx'
+import Spinner from '../components/Spinner.jsx'
 
-function StatCard({ title, value, sub, icon, accent, onClick }) {
+const formatDate = (ts) => {
+  if (!ts) return '—'
+  if (ts?.toDate) return ts.toDate().toLocaleString('en-IN')
+  if (ts instanceof Date) return ts.toLocaleString('en-IN')
+  return '—'
+}
+const formatMoney = (n) => (n != null ? '₹' + Number(n).toLocaleString('en-IN') : '—')
+
+function StatCard({ label, value, borderColor, loading }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="panel-card flex items-center gap-4 p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md w-full"
+    <div
+      className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm"
+      style={{ borderLeft: `4px solid ${borderColor}` }}
     >
-      <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl text-2xl ${accent}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-sm text-slate-500">{title}</p>
-        <p className="mt-0.5 text-2xl font-bold text-slate-800">{value}</p>
-        {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
-      </div>
-    </button>
-  )
-}
-
-function ActivityItem({ event }) {
-  const icons = {
-    ride: '🛵', haul: '🚛', user: '👤', completed: '✅', cancelled: '❌',
-  }
-  const type = event.type === 'GaamHaul' ? 'haul' : 'ride'
-  const status = String(event.status || '').toLowerCase()
-  const icon = status === 'completed' ? icons.completed : status === 'cancelled' ? icons.cancelled : event.isUser ? icons.user : icons[type]
-
-  const from = firstNonEmpty(event.pickupVillage, event.pickupLocation, event.pickup, event.fromVillage) || '?'
-  const to = firstNonEmpty(event.dropLocation, event.drop, event.toVillage, event.destinationVillage) || '?'
-
-  return (
-    <div className="flex items-start gap-3 py-3">
-      <span className="text-xl">{icon}</span>
-      <div className="flex-1 min-w-0">
-        {event.isUser ? (
-          <p className="text-sm text-slate-700">New user registered — <strong>{event.displayName || event.name || 'User'}</strong></p>
-        ) : (
-          <p className="text-sm text-slate-700">
-            <span className="capitalize">{status || 'New'}</span> {type === 'haul' ? 'haul booking' : 'ride'} — {from} → {to}
-          </p>
-        )}
-        <p className="text-xs text-slate-400">{formatTimeAgo(event.timestamp || event.createdAt)}</p>
-      </div>
-    </div>
-  )
-}
-
-function VillageHeatmap({ bookings, saathi }) {
-  const villageStats = useMemo(() => {
-    const today = new Date()
-    return VILLAGES.map((v) => {
-      const ridesCount = bookings.filter((b) => {
-        const d = toDate(b.timestamp || b.createdAt)
-        return d && isSameDay(d, today) &&
-          (b.pickupVillage === v.name || b.fromVillage === v.name || b.fromVillageName === v.name)
-      }).length
-
-      const saathiOnline = saathi.filter(
-        (s) => (s.village === v.name) && String(s.status || '').toLowerCase() === 'active'
-      ).length
-
-      let statusLabel = '🔴 Inactive'
-      let statusClass = 'text-red-500'
-      if (ridesCount > 0 && saathiOnline > 0) { statusLabel = '🟢 Active'; statusClass = 'text-green-600' }
-      else if (saathiOnline > 0) { statusLabel = '🟡 No Rides'; statusClass = 'text-amber-600' }
-      else if (ridesCount > 0) { statusLabel = '🟡 No Saathi'; statusClass = 'text-amber-600' }
-
-      return { ...v, ridesCount, saathiOnline, statusLabel, statusClass }
-    })
-  }, [bookings, saathi])
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-sm">
-        <thead className="bg-slate-50 text-slate-600">
-          <tr>
-            <th className="px-4 py-2.5 text-left font-semibold">Village</th>
-            <th className="px-4 py-2.5 text-center font-semibold">Rides Today</th>
-            <th className="px-4 py-2.5 text-center font-semibold">Saathi Online</th>
-            <th className="px-4 py-2.5 text-left font-semibold">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {villageStats.map((v) => (
-            <tr key={v.id} className="border-t border-slate-100 hover:bg-slate-50">
-              <td className="px-4 py-2.5 font-medium text-slate-800">
-                {v.gujarati} <span className="text-slate-400">({v.name})</span>
-              </td>
-              <td className="px-4 py-2.5 text-center font-semibold text-brand">{v.ridesCount}</td>
-              <td className="px-4 py-2.5 text-center font-semibold text-slate-700">{v.saathiOnline}</td>
-              <td className={`px-4 py-2.5 text-sm font-medium ${v.statusClass}`}>{v.statusLabel}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {loading ? (
+        <div className="flex h-10 items-center"><Spinner /></div>
+      ) : (
+        <p className="text-3xl font-bold text-gray-800">{value ?? '—'}</p>
+      )}
+      <p className="mt-1 text-sm text-gray-500">{label}</p>
     </div>
   )
 }
 
 export default function DashboardPage() {
-  const navigate = useNavigate()
-  const [saathi, setSaathi] = useState([])
-  const [bookings, setBookings] = useState([])
-  const [users, setUsers] = useState([])
+  const [totalUsers, setTotalUsers] = useState(null)
+  const [totalSaathis, setTotalSaathis] = useState(null)
+  const [onlineSaathis, setOnlineSaathis] = useState(null)
+  const [activeRides, setActiveRides] = useState(null)
+  const [completedToday, setCompletedToday] = useState(null)
+  const [haulBookings, setHaulBookings] = useState(null)
+
+  const { data: settings } = useDoc('app_settings', 'config')
+  const { data: recentRides, loading: ridesLoading } = useCollection(
+    'rides', orderBy('createdAt', 'desc'), limit(10),
+  )
+  const { data: recentHauls, loading: haulsLoading } = useCollection(
+    'haul_bookings', orderBy('createdAt', 'desc'), limit(10),
+  )
 
   useEffect(() => {
-    const unsubs = [
-      onSnapshot(collection(db, 'saathi'), (snap) => setSaathi(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(collection(db, 'bookings'), (snap) => setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(collection(db, 'users'), (snap) => setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    if (!db) return
+    const unsubs = []
+    unsubs.push(onSnapshot(collection(db, 'users'), (s) => setTotalUsers(s.size)))
+    unsubs.push(onSnapshot(collection(db, 'saathis'), (s) => setTotalSaathis(s.size)))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'saathis'), where('isOnline', '==', true)),
+      (s) => setOnlineSaathis(s.size),
+    ))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'rides'), where('status', 'in', ['searching', 'accepted', 'arriving', 'started'])),
+      (s) => setActiveRides(s.size),
+    ))
+    const todayMidnight = new Date()
+    todayMidnight.setHours(0, 0, 0, 0)
+    unsubs.push(onSnapshot(
+      query(
+        collection(db, 'rides'),
+        where('status', '==', 'completed'),
+        where('completedAt', '>=', Timestamp.fromDate(todayMidnight)),
       ),
-    ]
+      (s) => setCompletedToday(s.size),
+    ))
+    unsubs.push(onSnapshot(collection(db, 'haul_bookings'), (s) => setHaulBookings(s.size)))
     return () => unsubs.forEach((u) => u())
   }, [])
 
-  const now = new Date()
-
-  const todayBookings = useMemo(() =>
-    bookings.filter((b) => {
-      const d = toDate(b.timestamp || b.createdAt)
-      return d && isSameDay(d, now)
-    }), [bookings])
-
-  const activeSaathi = useMemo(() =>
-    saathi.filter((s) => String(s.status || '').toLowerCase() === 'active'), [saathi])
-
-  const onlineSaathi = useMemo(() =>
-    saathi.filter((s) => s.isOnline === true || String(s.onlineStatus || '').toLowerCase() === 'online'), [saathi])
-
-  const todayRideRevenue = useMemo(() =>
-    todayBookings
-      .filter((b) => String(b.status || '').toLowerCase() === 'completed' && b.type !== 'GaamHaul')
-      .reduce((sum, b) => sum + Number(b.fare || b.amount || 0), 0), [todayBookings])
-
-  const rideBookingsToday = useMemo(() =>
-    todayBookings.filter((b) => b.type !== 'GaamHaul'), [todayBookings])
-
-  const haulBookingsToday = useMemo(() =>
-    todayBookings.filter((b) => b.type === 'GaamHaul'), [todayBookings])
-
-  const completedRidesToday = useMemo(() =>
-    rideBookingsToday.filter((b) => String(b.status || '').toLowerCase() === 'completed'), [rideBookingsToday])
-
-  const completedHaulsToday = useMemo(() =>
-    haulBookingsToday.filter((b) => String(b.status || '').toLowerCase() === 'completed'), [haulBookingsToday])
-
-  const haulRevenue = completedHaulsToday.length * 75
-
-  const revenueChartData = useMemo(() => {
-    const days = []
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now)
-      d.setDate(now.getDate() - i)
-      d.setHours(0, 0, 0, 0)
-      const key = d.toISOString().slice(0, 10)
-      const label = d.toLocaleDateString('en-IN', { weekday: 'short' })
-      const dayBookings = bookings.filter((b) => {
-        const bd = toDate(b.timestamp || b.createdAt)
-        return bd && bd.toISOString().slice(0, 10) === key
-      })
-      const ride = dayBookings
-        .filter((b) => b.type !== 'GaamHaul' && String(b.status || '').toLowerCase() === 'completed')
-        .reduce((s, b) => s + Number(b.fare || b.amount || 0), 0)
-      const haul = dayBookings
-        .filter((b) => b.type === 'GaamHaul' && String(b.status || '').toLowerCase() === 'completed')
-        .length * 75
-      days.push({ label, GaamRide: ride, GaamHaul: haul })
+  const handleDisableMaintenance = async () => {
+    try {
+      await updateDoc(doc(db, 'app_settings', 'config'), { maintenanceMode: false })
+    } catch (e) {
+      console.error(e)
     }
-    return days
-  }, [bookings])
+  }
 
-  const activityFeed = useMemo(() => {
-    const allBookings = [...bookings]
-      .sort((a, b) => (toDate(b.timestamp || b.createdAt)?.getTime() || 0) - (toDate(a.timestamp || a.createdAt)?.getTime() || 0))
-      .slice(0, 7)
-      .map((b) => ({ ...b, isUser: false }))
-    const allUsers = [...users]
-      .sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0))
-      .slice(0, 3)
-      .map((u) => ({ ...u, isUser: true }))
-    return [...allBookings, ...allUsers]
-      .sort((a, b) => (toDate(b.timestamp || b.createdAt)?.getTime() || 0) - (toDate(a.timestamp || a.createdAt)?.getTime() || 0))
-      .slice(0, 10)
-  }, [bookings, users])
+  const stats = [
+    { label: 'Total Users', value: totalUsers, borderColor: '#3b82f6' },
+    { label: 'Total Saathis', value: totalSaathis, borderColor: '#8b5cf6' },
+    { label: 'Online Saathis', value: onlineSaathis, borderColor: '#10b981' },
+    { label: 'Active Rides', value: activeRides, borderColor: '#f97316' },
+    { label: 'Completed Today', value: completedToday, borderColor: '#06b6d4' },
+    { label: 'Haul Bookings', value: haulBookings, borderColor: '#f59e0b' },
+  ]
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Users Today" value={users.length} icon="👥"
-          accent="bg-blue-100" sub="Total registered"
-          onClick={() => navigate('/users')}
-        />
-        <StatCard
-          title="Active Saathi" value={onlineSaathi.length} icon="🛵"
-          accent="bg-brand-light" sub={`${activeSaathi.length} approved total`}
-          onClick={() => navigate('/saathi')}
-        />
-        <StatCard
-          title="Rides Today" value={todayBookings.length} icon="📋"
-          accent="bg-emerald-100" sub={`${completedRidesToday.length} completed`}
-          onClick={() => navigate('/ride-history')}
-        />
-        <StatCard
-          title="Revenue Today" value={formatCurrency(todayRideRevenue + haulRevenue)} icon="💰"
-          accent="bg-amber-100" sub="GaamRide + GaamHaul"
-          onClick={() => navigate('/revenue')}
-        />
+      {settings?.maintenanceMode && (
+        <div className="flex items-center justify-between rounded-lg bg-red-500 px-4 py-3 text-white">
+          <span className="text-sm font-medium">
+            ⚠️ App is in maintenance mode. Users cannot book rides.
+          </span>
+          <button
+            type="button"
+            onClick={handleDisableMaintenance}
+            className="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+          >
+            Disable
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        {stats.map((s) => (
+          <StatCard key={s.label} {...s} loading={s.value === null} />
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-xl border-2 border-brand bg-brand/5 p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">🛵</span>
-            <h3 className="font-bold text-brand text-base">GaamRide Today</h3>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="border-b border-gray-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-gray-700">Recent Rides</h2>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><p className="text-xs text-slate-500">Rides</p><p className="text-xl font-bold text-slate-800">{rideBookingsToday.length}</p></div>
-            <div><p className="text-xs text-slate-500">Active Saathi</p><p className="text-xl font-bold text-slate-800">{onlineSaathi.length}</p></div>
-            <div><p className="text-xs text-slate-500">Completed</p><p className="text-xl font-bold text-brand">{completedRidesToday.length}</p></div>
-            <div><p className="text-xs text-slate-500">Revenue</p><p className="text-xl font-bold text-slate-800">{formatCurrency(todayRideRevenue)}</p></div>
-          </div>
-        </div>
-
-        <div className="rounded-xl border-2 border-haul bg-haul/5 p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">🚛</span>
-            <h3 className="font-bold text-haul text-base">GaamHaul Today</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><p className="text-xs text-slate-500">Bookings</p><p className="text-xl font-bold text-slate-800">{haulBookingsToday.length}</p></div>
-            <div><p className="text-xs text-slate-500">Active Vehicles</p><p className="text-xl font-bold text-slate-800">—</p></div>
-            <div><p className="text-xs text-slate-500">Completed</p><p className="text-xl font-bold text-haul">{completedHaulsToday.length}</p></div>
-            <div><p className="text-xs text-slate-500">Revenue</p><p className="text-xl font-bold text-slate-800">{formatCurrency(haulRevenue)}</p></div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="panel-card p-5 xl:col-span-2">
-          <h3 className="mb-4 font-bold text-slate-800">Revenue — Last 7 Days</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={revenueChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `₹${v}`} />
-                <Tooltip formatter={(v) => `₹${v}`} />
-                <Legend />
-                <Line type="monotone" dataKey="GaamRide" stroke="#2E7D32" strokeWidth={2.5} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="GaamHaul" stroke="#E65100" strokeWidth={2.5} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="panel-card p-5">
-          <h3 className="mb-3 font-bold text-slate-800">Live Activity</h3>
-          <div className="divide-y divide-slate-100">
-            {activityFeed.length === 0 && (
-              <p className="py-4 text-sm text-slate-400">No recent activity yet.</p>
+          <div className="overflow-x-auto">
+            {ridesLoading ? (
+              <div className="flex justify-center p-6"><Spinner /></div>
+            ) : recentRides.length === 0 ? (
+              <p className="p-6 text-center text-sm text-gray-400">No records found</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['ID', 'Customer', 'Route', 'Status', 'Fare', 'Time'].map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {recentRides.map((r, i) => (
+                    <tr key={r.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{(r.rideId || r.id).slice(0, 8)}</td>
+                      <td className="px-4 py-2.5">{r.customerName || '—'}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-500">{r.pickupVillage} → {r.destinationVillage}</td>
+                      <td className="px-4 py-2.5"><StatusBadge status={r.status} /></td>
+                      <td className="px-4 py-2.5">{formatMoney(r.fare)}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-400">{formatDate(r.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
-            {activityFeed.map((event) => (
-              <ActivityItem key={event.id} event={event} />
-            ))}
           </div>
         </div>
-      </div>
 
-      <div className="panel-card overflow-hidden">
-        <div className="section-header">
-          <h3 className="font-bold text-slate-800">Village Activity — Today</h3>
+        <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="border-b border-gray-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-gray-700">Recent Haul Bookings</h2>
+          </div>
+          <div className="overflow-x-auto">
+            {haulsLoading ? (
+              <div className="flex justify-center p-6"><Spinner /></div>
+            ) : recentHauls.length === 0 ? (
+              <p className="p-6 text-center text-sm text-gray-400">No records found</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['ID', 'Customer', 'Vehicle', 'Pickup', 'Status', 'Commission', 'Time'].map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {recentHauls.map((h, i) => (
+                    <tr key={h.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{(h.bookingId || h.id).slice(0, 8)}</td>
+                      <td className="px-4 py-2.5">{h.customerName || '—'}</td>
+                      <td className="px-4 py-2.5 text-xs">{h.vehicleType || '—'}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-500">{h.pickupVillage || '—'}</td>
+                      <td className="px-4 py-2.5"><StatusBadge status={h.status} /></td>
+                      <td className="px-4 py-2.5 text-xs">₹75</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-400">{formatDate(h.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
-        <VillageHeatmap bookings={bookings} saathi={saathi} />
       </div>
     </div>
   )

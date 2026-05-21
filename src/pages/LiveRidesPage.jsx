@@ -1,192 +1,202 @@
-import { collection, onSnapshot } from 'firebase/firestore'
-import { useEffect, useMemo, useState } from 'react'
-import { MapPin, Clock, Navigation } from 'lucide-react'
+import { useState } from 'react'
+import { doc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore'
+import toast from 'react-hot-toast'
 import { db } from '../firebase'
-import { toDate, formatTimeAgo, firstNonEmpty } from '../utils/formatters'
-import { VILLAGES } from '../utils/constants'
-import EmptyTableState from '../components/EmptyTableState'
+import { useCollection } from '../hooks/useCollection.js'
+import StatusBadge from '../components/StatusBadge.jsx'
+import ConfirmModal from '../components/ConfirmModal.jsx'
+import Spinner from '../components/Spinner.jsx'
 
-const STATUS_CONFIG = {
-  searching: { label: 'Searching', dot: 'bg-blue-500', card: 'border-blue-200 bg-blue-50' },
-  accepted: { label: 'Accepted', dot: 'bg-amber-400', card: 'border-amber-200 bg-amber-50' },
-  started: { label: 'In Progress', dot: 'bg-orange-500', card: 'border-orange-200 bg-orange-50' },
-  completed: { label: 'Completed', dot: 'bg-green-500', card: 'border-green-200 bg-green-50' },
-  cancelled: { label: 'Cancelled', dot: 'bg-rose-500', card: 'border-rose-200 bg-rose-50' },
+const formatDate = (ts) => {
+  if (!ts) return '—'
+  if (ts?.toDate) return ts.toDate().toLocaleString('en-IN')
+  if (ts instanceof Date) return ts.toLocaleString('en-IN')
+  return '—'
 }
+const formatMoney = (n) => (n != null ? '₹' + Number(n).toLocaleString('en-IN') : '—')
 
-function StatusPill({ status }) {
-  const s = String(status || '').toLowerCase()
-  const cfg = STATUS_CONFIG[s] || { label: status || '—', dot: 'bg-slate-300', card: '' }
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold">
-      <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
-      {cfg.label}
-    </span>
-  )
-}
-
-function RideCard({ ride, selected, onClick }) {
-  const s = String(ride.status || '').toLowerCase()
-  const cfg = STATUS_CONFIG[s] || { card: 'border-slate-200 bg-white' }
-  const from = firstNonEmpty(ride.pickupVillage, ride.pickupLocation, ride.fromVillage) || '?'
-  const to = firstNonEmpty(ride.dropLocation, ride.drop, ride.toVillage, ride.destinationVillage) || '?'
-  const customer = firstNonEmpty(ride.customerName, ride.userName) || 'Customer'
-  const saathi = firstNonEmpty(ride.saathiName, ride.driverName, ride.assignedDriverName) || 'Unassigned'
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full rounded-xl border-2 p-4 text-left transition hover:shadow-md ${
-        selected ? 'ring-2 ring-brand ring-offset-1' : ''
-      } ${cfg.card}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-slate-800 text-sm truncate">{customer}</p>
-          <p className="text-xs text-slate-500 mt-0.5">Saathi: {saathi}</p>
-        </div>
-        <StatusPill status={ride.status} />
-      </div>
-      <div className="mt-3 flex items-center gap-2 text-sm">
-        <MapPin size={13} className="text-brand flex-shrink-0" />
-        <span className="text-slate-600 truncate">{from} → {to}</span>
-      </div>
-      {(ride.fare || ride.amount) && (
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-sm font-bold text-brand">₹{ride.fare || ride.amount}</span>
-          <span className="text-xs text-slate-400">{formatTimeAgo(ride.timestamp || ride.createdAt)}</span>
-        </div>
-      )}
-    </button>
-  )
-}
-
-function MapPlaceholder({ rides }) {
-  return (
-    <div className="relative h-full min-h-[400px] rounded-xl bg-slate-100 flex flex-col items-center justify-center overflow-hidden border border-slate-200">
-      <div className="absolute inset-0 opacity-5">
-        <svg width="100%" height="100%">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-      <div className="relative text-center px-6">
-        <div className="text-5xl mb-3">🗺️</div>
-        <h3 className="font-bold text-slate-700">Live Map — Mahuva Taluka</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Add <code className="rounded bg-slate-200 px-1 text-xs">VITE_GOOGLE_MAPS_KEY</code> to enable live tracking
-        </p>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-          {VILLAGES.slice(0, 6).map((v) => (
-            <div key={v.id} className="rounded-lg bg-white px-2 py-1.5 shadow-sm">
-              <span className="font-semibold text-brand">{v.gujarati}</span>
-              <p className="text-slate-400">{v.name}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-500">
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" />Customer</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-green-500" />Saathi</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-orange-500" />In Progress</span>
-        </div>
-      </div>
-      <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-        {rides.slice(0, 5).map((ride, i) => (
-          <div key={ride.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 shadow-sm text-xs">
-            <span className={`h-2 w-2 rounded-full ${STATUS_CONFIG[String(ride.status || '').toLowerCase()]?.dot || 'bg-slate-300'}`} />
-            <span className="font-medium">{firstNonEmpty(ride.pickupVillage, ride.fromVillage) || '?'}</span>
-            <Navigation size={10} className="text-slate-400" />
-            <span>{firstNonEmpty(ride.dropLocation, ride.toVillage) || '?'}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-const FILTERS = ['all', 'searching', 'accepted', 'started', 'completed', 'cancelled']
+const ACTIVE_STATUSES = ['searching', 'accepted', 'arriving', 'started']
 
 export default function LiveRidesPage() {
-  const [bookings, setBookings] = useState([])
-  const [filter, setFilter] = useState('all')
-  const [villageFilter, setVillageFilter] = useState('all')
-  const [selectedId, setSelectedId] = useState(null)
+  const { data: rides, loading } = useCollection('rides', orderBy('createdAt', 'desc'))
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [villageFilter, setVillageFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
+  const [detail, setDetail] = useState(null)
+  const [confirm, setConfirm] = useState(null)
+  const [cancelConfirm, setCancelConfirm] = useState(null)
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'bookings'), (snap) =>
-      setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    )
-    return () => unsub()
-  }, [])
+  const filtered = rides.filter((r) => {
+    const matchStatus = statusFilter === 'all' || r.status === statusFilter
+    const q = villageFilter.toLowerCase()
+    const matchVillage = !q ||
+      (r.pickupVillage || '').toLowerCase().includes(q) ||
+      (r.destinationVillage || '').toLowerCase().includes(q)
+    const matchDate = !dateFilter || (() => {
+      const d = r.createdAt?.toDate ? r.createdAt.toDate() : null
+      return d ? d.toISOString().slice(0, 10) === dateFilter : false
+    })()
+    return matchStatus && matchVillage && matchDate
+  })
 
-  const rideBookings = useMemo(() =>
-    bookings.filter((b) => b.type !== 'GaamHaul')
-      .sort((a, b) => (toDate(b.timestamp || b.createdAt)?.getTime() || 0) - (toDate(a.timestamp || a.createdAt)?.getTime() || 0)),
-    [bookings])
+  const handleCancel = async (r) => {
+    try {
+      await updateDoc(doc(db, 'rides', r.id), {
+        status: 'cancelled',
+        cancelReason: 'Admin cancelled',
+      })
+      toast.success('Ride cancelled')
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    }
+    setCancelConfirm(null)
+  }
 
-  const activeRides = useMemo(() =>
-    rideBookings.filter((b) => ['searching', 'accepted', 'started'].includes(String(b.status || '').toLowerCase())),
-    [rideBookings])
-
-  const filtered = useMemo(() =>
-    rideBookings.filter((b) => {
-      const matchStatus = filter === 'all' || String(b.status || '').toLowerCase() === filter
-      const matchVillage = villageFilter === 'all' ||
-        b.pickupVillage === villageFilter || b.fromVillage === villageFilter
-      return matchStatus && matchVillage
-    }), [rideBookings, filter, villageFilter])
+  const handleDelete = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'rides', id))
+      toast.success('Deleted successfully')
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    }
+    setConfirm(null)
+  }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition capitalize ${
-                filter === f ? 'bg-brand text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {f === 'all' ? `All (${rideBookings.length})` : f}
-            </button>
-          ))}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-bold text-gray-800">Rides</h1>
+          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">{filtered.length}</span>
         </div>
-        <select className="input ml-auto max-w-[180px]" value={villageFilter} onChange={(e) => setVillageFilter(e.target.value)}>
-          <option value="all">All Villages</option>
-          {VILLAGES.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
-        </select>
-        <div className="flex items-center gap-2 rounded-lg bg-brand/10 px-3 py-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand animate-pulse" />
-          <span className="text-xs font-semibold text-brand">{activeRides.length} Active</span>
+        <div className="flex flex-wrap gap-2">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300">
+            <option value="all">All Statuses</option>
+            {['searching','accepted','arriving','started','completed','cancelled'].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <input type="text" value={villageFilter} onChange={(e) => setVillageFilter(e.target.value)}
+            placeholder="Filter by village…"
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300 w-36" />
+          <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-        <div className="space-y-3 lg:col-span-2 max-h-[700px] overflow-y-auto pr-1">
-          {filtered.length === 0 && (
-            <EmptyTableState message="No rides match your filters." />
-          )}
-          {filtered.map((ride) => (
-            <RideCard
-              key={ride.id}
-              ride={ride}
-              selected={selectedId === ride.id}
-              onClick={() => setSelectedId(ride.id === selectedId ? null : ride.id)}
-            />
-          ))}
-        </div>
-
-        <div className="lg:col-span-3">
-          <MapPlaceholder rides={activeRides} />
-        </div>
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+        {loading ? (
+          <div className="flex justify-center p-10"><Spinner /></div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 p-10 text-gray-400">
+            <span className="text-3xl">🛵</span>
+            <p className="text-sm">No records found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  {['Ride ID','Customer','Saathi','Route','Status','Fare','Dist','OTP','Time','Actions'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map((r, i) => (
+                  <tr key={r.id} className={`hover:bg-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{(r.rideId || r.id).slice(0,8)}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{r.customerName || '—'}</p>
+                      <p className="text-xs text-gray-400">{r.customerPhone || ''}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.saathiName ? (
+                        <>
+                          <p>{r.saathiName}</p>
+                          <p className="text-xs text-gray-400">{r.saathiPhone}</p>
+                        </>
+                      ) : (
+                        <span className="italic text-gray-400">Unassigned</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{r.pickupVillage} → {r.destinationVillage}</td>
+                    <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                    <td className="px-4 py-3">{formatMoney(r.fare)}</td>
+                    <td className="px-4 py-3 text-xs">{r.distance ? `${r.distance} km` : '—'}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{r.otp || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{formatDate(r.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button type="button" title="View" onClick={() => setDetail(r)} className="rounded p-1 hover:bg-gray-100">👁️</button>
+                        {ACTIVE_STATUSES.includes(r.status) && (
+                          <button type="button" title="Cancel" onClick={() => setCancelConfirm(r)} className="rounded p-1 hover:bg-orange-50">❌</button>
+                        )}
+                        {['completed','cancelled'].includes(r.status) && (
+                          <button type="button" title="Delete" onClick={() => setConfirm(r)} className="rounded p-1 hover:bg-red-50">🗑️</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDetail(null)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-800">Ride Details</h3>
+              <button type="button" onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              {[
+                ['Ride ID', detail.rideId || detail.id],
+                ['Status', <StatusBadge key="s" status={detail.status} />],
+                ['Customer', `${detail.customerName || '—'} (${detail.customerPhone || '—'})`],
+                ['Saathi', detail.saathiName ? `${detail.saathiName} (${detail.saathiPhone})` : 'Unassigned'],
+                ['Pickup', `${detail.pickupVillage} (${detail.pickupLat}, ${detail.pickupLng})`],
+                ['Destination', `${detail.destinationVillage} (${detail.destinationLat}, ${detail.destinationLng})`],
+                ['Saathi Location', detail.saathiLat ? `${detail.saathiLat}, ${detail.saathiLng}` : 'no data'],
+                ['Fare', formatMoney(detail.fare)],
+                ['Distance', detail.distance ? `${detail.distance} km` : '—'],
+                ['OTP', detail.otp || '—'],
+                ['Rating', detail.rating ?? '—'],
+                ['Cancel Reason', detail.cancelReason || '—'],
+                ['Created', formatDate(detail.createdAt)],
+                ['Accepted', formatDate(detail.acceptedAt)],
+                ['Started', formatDate(detail.startedAt)],
+                ['Completed', formatDate(detail.completedAt)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+                  <p className="mt-0.5 text-gray-700">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={!!cancelConfirm}
+        title="Cancel this ride?"
+        message="This will set the ride status to cancelled. Admin cancelled reason will be recorded."
+        onConfirm={() => handleCancel(cancelConfirm)}
+        onCancel={() => setCancelConfirm(null)}
+        confirmLabel="Cancel Ride"
+      />
+      <ConfirmModal
+        isOpen={!!confirm}
+        title="Delete ride?"
+        message="This will permanently delete this ride record."
+        onConfirm={() => handleDelete(confirm?.id)}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   )
 }

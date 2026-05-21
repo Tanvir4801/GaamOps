@@ -16,7 +16,7 @@
   }
 
   body {
-    @apply m-0 min-h-screen bg-surface text-slate-700;
+    @apply m-0 min-h-screen bg-gray-50 text-slate-700;
   }
 
   h1, h2, h3, h4, h5, h6 {
