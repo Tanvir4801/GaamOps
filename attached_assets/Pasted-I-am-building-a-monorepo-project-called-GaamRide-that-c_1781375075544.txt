@@ -1,0 +1,2017 @@
+I am building a monorepo project called GaamRide that contains:
+1. Flutter mobile app (folder: /mobile)
+2. React admin panel - already exists in this repo (folder: /admin or root)
+
+Create a BRAND NEW Flutter app from scratch inside folder /mobile
+Do NOT touch any existing React/admin files.
+
+===================================================
+MONOREPO STRUCTURE TO CREATE
+===================================================
+
+GaamRide/ (this repo root)
+  ├── admin/          ← existing React GaamOps (DO NOT TOUCH)
+  ├── mobile/         ← CREATE THIS — new Flutter app
+  │   ├── android/
+  │   ├── ios/
+  │   ├── lib/
+  │   ├── pubspec.yaml
+  │   └── ...
+  └── README.md
+
+===================================================
+STEP 1 — CREATE FLUTTER PROJECT
+===================================================
+
+Run this command to create Flutter app inside /mobile folder:
+  flutter create mobile --org com.gaamride --project-name gaamride
+
+Then set up the folder structure inside /mobile/lib/ as defined below.
+
+===================================================
+FIREBASE CONFIG (same project as admin)
+===================================================
+
+Firebase Project: (same Firebase project as existing React admin)
+Package name Android: com.gaamride.app
+Bundle ID iOS: com.gaamride.app
+
+Required Firebase services:
+- Firebase Auth (Phone OTP + Google)
+- Cloud Firestore
+- Firebase Messaging (FCM)
+- Firebase Storage
+
+Add google-services.json to mobile/android/app/
+Add GoogleService-Info.plist to mobile/ios/Runner/
+
+===================================================
+PUBSPEC.YAML — mobile/pubspec.yaml
+===================================================
+
+```yaml
+name: gaamride
+description: Village Transport & Logistics Platform
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Firebase
+  firebase_core: ^3.1.0
+  firebase_auth: ^5.1.0
+  cloud_firestore: ^5.1.0
+  firebase_messaging: ^15.0.0
+  firebase_storage: ^12.1.0
+  
+  # Maps & Location
+  google_maps_flutter: ^2.6.0
+  geolocator: ^12.0.0
+  geoflutterfire_plus: ^0.0.14
+  permission_handler: ^11.3.0
+  
+  # Auth
+  google_sign_in: ^6.2.0
+  
+  # UI & Utils
+  url_launcher: ^6.3.0
+  cached_network_image: ^3.3.0
+  image_picker: ^1.1.0
+  flutter_local_notifications: ^17.1.0
+  intl: ^0.19.0
+  shared_preferences: ^2.3.0
+  http: ^1.2.0
+  flutter_spinkit: ^5.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+```
+
+===================================================
+EXACT FIRESTORE COLLECTIONS (use these exactly)
+===================================================
+
+app_settings/config:
+  appVersion: "1.0.0"
+  haulCommission: 75
+  maintenanceMode: false
+  rideFareBase: 20
+  rideFareMaximum: 200
+  rideFareMinimum: 25
+  rideFarePerKm: 8
+  serviceZoneNE: { lat: 20.92, lng: 73.32 }
+  serviceZoneSW: { lat: 20.78, lng: 73.19 }
+
+users/{uid}:
+  uid, name, displayName, phone, role, village,
+  profilePhoto, fcmToken, isBlocked, createdAt, updatedAt
+  role values: "customer" | "saathi" | "both"
+
+saathis/{uid}:
+  uid, name, phone, village, vehicleType, vehicleNumber,
+  isAvailable, isOnline, isBlocked,
+  position: { geohash: string, geopoint: GeoPoint },
+  lastSeen, rating, totalRides, fcmToken, createdAt
+
+rides/{rideId}:
+  rideId, customerId, customerName, customerPhone,
+  saathiId, saathiName, saathiPhone,
+  pickupVillage, pickupLat, pickupLng,
+  destinationVillage, destinationLat, destinationLng,
+  status (ONE value: "searching"|"accepted"|"arriving"|
+          "started"|"completed"|"cancelled"),
+  fare, distance, otp,
+  saathiLat, saathiLng,
+  cancelReason, rating,
+  createdAt, acceptedAt, startedAt, completedAt
+
+haul_bookings/{bookingId}:
+  bookingId, customerId, customerName, customerPhone,
+  vehicleOwnerId, ownerName, ownerPhone,
+  vehicleType, duration (ONE value: "1h"|"2h"|"half_day"|"full_day"),
+  durationHours, loadDescription,
+  pickupVillage, pickupLat, pickupLng,
+  status (ONE value: "searching"|"accepted"|"started"|
+          "completed"|"cancelled"),
+  appCommission: 75, ownerEarnings,
+  ownerLat, ownerLng,
+  cancelReason, createdAt, acceptedAt, completedAt
+
+haul_vehicles/{uid}:
+  uid, ownerName, phone, village,
+  vehicleType ("mini_tempo"|"pickup"|"tractor"|"truck_407"),
+  capacity, ratePerHour, vehicleNumber,
+  isAvailable,
+  position: { geohash, geopoint },
+  lastSeen, totalBookings, fcmToken, createdAt
+
+villages/{villageId} (doc IDs lowercase):
+  name, nameGu, lat, lng, isActive, taluka
+
+EXACT VILLAGE DATA:
+anaval:     name:"Anaval",     nameGu:"આણવલ",    lat:20.8394, lng:73.2637
+kos:        name:"Kos",        nameGu:"કૉસ",     lat:20.8480, lng:73.2350
+tarkani:    name:"Tarkani",    nameGu:"તારકણી",  lat:20.8550, lng:73.2580
+angaldhara: name:"Angaldhara", nameGu:"અંગળધરા", lat:20.8180, lng:73.2280
+dholikuva:  name:"Dholikuva",  nameGu:"ઢોળીકૂવા",lat:20.8650, lng:73.2800
+lakhavadi:  name:"Lakhavadi",  nameGu:"લખાવડી",  lat:20.8050, lng:73.2150
+unai:       name:"Unai",       nameGu:"ઉનાઈ",    lat:20.8550, lng:73.2100
+doldha:     name:"Doldha",     nameGu:"ડોળધા",   lat:20.7950, lng:73.2600
+kamboya:    name:"Kamboya",    nameGu:"કાંબોયા", lat:20.8750, lng:73.2200
+
+===================================================
+COMPLETE FILE STRUCTURE — mobile/lib/
+===================================================
+
+lib/
+  main.dart
+  firebase_options.dart
+
+  constants/
+    app_colors.dart
+    app_strings.dart
+    app_constants.dart
+
+  models/
+    user_model.dart
+    saathi_model.dart
+    ride_model.dart
+    haul_booking_model.dart
+    haul_vehicle_model.dart
+    village_model.dart
+    app_settings_model.dart
+
+  services/
+    auth_service.dart
+    ride_service.dart
+    saathi_service.dart
+    haul_service.dart
+    village_service.dart
+    location_service.dart
+    notification_service.dart
+    settings_service.dart
+
+  screens/
+    splash_screen.dart
+    welcome_screen.dart
+    login_screen.dart
+    otp_screen.dart
+    profile_setup_screen.dart
+    saathi_register_screen.dart
+    auth_gate_screen.dart
+    maintenance_screen.dart
+
+    customer/
+      customer_main_shell.dart
+      customer_home_screen.dart
+      ride_request_screen.dart
+      ride_tracking_screen.dart
+      ride_complete_screen.dart
+      rating_screen.dart
+      ride_history_screen.dart
+      gaam_haul_home_screen.dart
+      haul_confirm_screen.dart
+      haul_request_screen.dart
+      haul_tracking_screen.dart
+      haul_complete_screen.dart
+      customer_profile_screen.dart
+
+    saathi/
+      saathi_main_shell.dart
+      saathi_dashboard.dart
+      saathi_ride_screen.dart
+      saathi_profile_screen.dart
+      saathi_earnings_screen.dart
+      saathi_history_screen.dart
+
+  widgets/
+    saathi_card.dart
+    haul_vehicle_card.dart
+    village_selector_sheet.dart
+    ride_request_popup.dart
+    rating_widget.dart
+    sos_button.dart
+    earnings_card.dart
+    custom_marker_builder.dart
+    loading_overlay.dart
+    gujarati_text.dart
+
+  utils/
+    fare_calculator.dart
+    otp_generator.dart
+    marker_helper.dart
+    date_formatter.dart
+
+===================================================
+CONSTANTS — lib/constants/app_colors.dart
+===================================================
+
+```dart
+class AppColors {
+  // GaamRide (green)
+  static const primaryGreen = Color(0xFF2E7D32);
+  static const lightGreen = Color(0xFF4CAF50);
+  static const bgGreen = Color(0xFFE8F5E9);
+
+  // GaamHaul (orange)
+  static const primaryOrange = Color(0xFFE65100);
+  static const lightOrange = Color(0xFFFF7043);
+  static const bgOrange = Color(0xFFFBE9E7);
+
+  // General
+  static const background = Color(0xFFF5F5F5);
+  static const cardWhite = Color(0xFFFFFFFF);
+  static const textDark = Color(0xFF212121);
+  static const textGrey = Color(0xFF757575);
+  static const textLight = Color(0xFFBDBDBD);
+  static const success = Color(0xFF1D9E75);
+  static const error = Color(0xFFD32F2F);
+  static const warning = Color(0xFFFF6F00);
+  static const sosRed = Color(0xFFB71C1C);
+}
+```
+
+===================================================
+WIDGET — GujaratiText (use everywhere for UI text)
+===================================================
+
+```dart
+// lib/widgets/gujarati_text.dart
+// Every user-facing string shows Gujarati above English below
+
+class GujaratiText extends StatelessWidget {
+  final String gujarati;
+  final String english;
+  final double gujaratiSize;
+  final double englishSize;
+  final Color? color;
+  final FontWeight weight;
+
+  const GujaratiText({
+    required this.gujarati,
+    required this.english,
+    this.gujaratiSize = 15,
+    this.englishSize = 12,
+    this.color,
+    this.weight = FontWeight.normal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(gujarati,
+          style: TextStyle(
+            fontSize: gujaratiSize,
+            fontWeight: weight,
+            color: color ?? AppColors.textDark,
+          )),
+        Text(english,
+          style: TextStyle(
+            fontSize: englishSize,
+            color: AppColors.textGrey,
+          )),
+      ],
+    );
+  }
+}
+```
+
+===================================================
+MAIN.DART
+===================================================
+
+```dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Initialize FCM
+  await NotificationService.initialize();
+
+  runApp(const GaamRideApp());
+}
+
+class GaamRideApp extends StatelessWidget {
+  const GaamRideApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'GaamRide',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primaryColor: AppColors.primaryGreen,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primaryGreen,
+        ),
+        fontFamily: 'Roboto',
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+        ),
+        cardTheme: CardTheme(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      home: const SplashScreen(),
+    );
+  }
+}
+```
+
+===================================================
+SPLASH SCREEN
+===================================================
+
+```dart
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+
+  late AnimationController _controller;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _fadeAnim = Tween(begin: 0.0, end: 1.0).animate(_controller);
+    _controller.forward();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    // Check maintenance mode first
+    final settings = await SettingsService.getSettings();
+    if (settings.maintenanceMode) {
+      _go(const MaintenanceScreen());
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _go(const WelcomeScreen());
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(user.uid).get();
+
+      if (!doc.exists) {
+        _go(const WelcomeScreen());
+        return;
+      }
+
+      final data = doc.data()!;
+
+      // Check if blocked
+      if (data['isBlocked'] == true) {
+        await FirebaseAuth.instance.signOut();
+        _go(const WelcomeScreen());
+        return;
+      }
+
+      final role = data['role'] as String? ?? 'customer';
+
+      if (role == 'saathi') {
+        _go(const SaathiMainShell());
+      } else {
+        _go(const CustomerMainShell());
+      }
+    } catch (e) {
+      _go(const WelcomeScreen());
+    }
+  }
+
+  void _go(Widget screen) {
+    Navigator.pushReplacement(context,
+      MaterialPageRoute(builder: (_) => screen));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: FadeTransition(
+        opacity: _fadeAnim,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Logo circle
+              Container(
+                width: 110, height: 110,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryGreen,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.directions_bike,
+                  color: Colors.white, size: 60),
+              ),
+              const SizedBox(height: 24),
+              const Text('GaamRide',
+                style: TextStyle(
+                  fontSize: 36, fontWeight: FontWeight.bold,
+                  color: AppColors.primaryGreen,
+                  letterSpacing: 1.5,
+                )),
+              const SizedBox(height: 8),
+              const Text('ગામનો પોતાનો સાથી',
+                style: TextStyle(fontSize: 16,
+                  color: AppColors.textGrey)),
+              const Text('Village Transport at Your Fingertips',
+                style: TextStyle(fontSize: 12,
+                  color: AppColors.textLight)),
+              const SizedBox(height: 80),
+              const CircularProgressIndicator(
+                color: AppColors.primaryGreen,
+                strokeWidth: 2,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+===================================================
+WELCOME SCREEN
+===================================================
+
+```dart
+class WelcomeScreen extends StatelessWidget {
+  const WelcomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            children: [
+              const Spacer(flex: 2),
+              // Logo
+              Container(
+                width: 90, height: 90,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryGreen,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.directions_bike,
+                  color: Colors.white, size: 48),
+              ),
+              const SizedBox(height: 20),
+              const Text('GaamRide',
+                style: TextStyle(fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryGreen)),
+              const SizedBox(height: 6),
+              const Text('ગ્રામ પરિવહન, હવે સરળ',
+                style: TextStyle(fontSize: 16,
+                  color: AppColors.textGrey)),
+              const Text('Village transport, now simple',
+                style: TextStyle(fontSize: 13,
+                  color: AppColors.textLight)),
+
+              const Spacer(flex: 3),
+
+              // Customer button
+              SizedBox(
+                width: double.infinity, height: 56,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryGreen,
+                  ),
+                  onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) =>
+                      const LoginScreen(role: 'customer'))),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Customer તરીકે ચાલુ કરો',
+                        style: TextStyle(fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                      Text('Continue as Customer',
+                        style: TextStyle(fontSize: 11,
+                          color: Colors.white70)),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Saathi button
+              SizedBox(
+                width: double.infinity, height: 56,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryOrange,
+                  ),
+                  onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) =>
+                      const LoginScreen(role: 'saathi'))),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Gaam Saathi બનો',
+                        style: TextStyle(fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                      Text('Become a Driver & Earn',
+                        style: TextStyle(fontSize: 11,
+                          color: Colors.white70)),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+              const Text('Mahuva Taluka · Surat · Gujarat',
+                style: TextStyle(fontSize: 12,
+                  color: AppColors.textLight)),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+===================================================
+LOGIN SCREEN (proper full screen, not dialog)
+===================================================
+
+```dart
+class LoginScreen extends StatefulWidget {
+  final String role; // 'customer' or 'saathi'
+  const LoginScreen({super.key, required this.role});
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _phoneCtrl = TextEditingController();
+  bool _isLoading = false;
+  bool get _isSaathi => widget.role == 'saathi';
+  Color get _color => _isSaathi
+      ? AppColors.primaryOrange : AppColors.primaryGreen;
+
+  Future<void> _sendOTP() async {
+    final phone = _phoneCtrl.text.trim();
+    if (phone.length != 10) {
+      _showSnack('10 અંકનો નંબર દાખલ કરો / Enter 10 digit number');
+      return;
+    }
+    setState(() => _isLoading = true);
+
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: '+91$phone',
+      verificationCompleted: (credential) async {
+        final result = await FirebaseAuth.instance
+            .signInWithCredential(credential);
+        await _handlePostLogin(result.user!.uid);
+      },
+      verificationFailed: (e) {
+        setState(() => _isLoading = false);
+        _showSnack('Error: ${e.message}');
+      },
+      codeSent: (verificationId, _) {
+        setState(() => _isLoading = false);
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => OTPScreen(
+            phone: phone,
+            verificationId: verificationId,
+            role: widget.role,
+          )));
+      },
+      codeAutoRetrievalTimeout: (_) {},
+    );
+  }
+
+  Future<void> _googleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final result = await FirebaseAuth.instance
+          .signInWithCredential(credential);
+      await _handlePostLogin(result.user!.uid);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showSnack('Google login failed');
+    }
+  }
+
+  Future<void> _handlePostLogin(String uid) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users').doc(uid).get();
+
+    if (!mounted) return;
+
+    if (!doc.exists) {
+      // New user
+      if (_isSaathi) {
+        _goRemoveAll(const SaathiRegisterScreen());
+      } else {
+        _goRemoveAll(const ProfileSetupScreen());
+      }
+    } else {
+      final role = doc.data()!['role'] as String? ?? 'customer';
+      if (role == 'saathi') {
+        _goRemoveAll(const SaathiMainShell());
+      } else {
+        _goRemoveAll(const CustomerMainShell());
+      }
+    }
+  }
+
+  void _goRemoveAll(Widget screen) {
+    Navigator.pushAndRemoveUntil(context,
+      MaterialPageRoute(builder: (_) => screen),
+      (route) => false);
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: _color,
+        title: Text(
+          _isSaathi ? 'સાથી લૉગિન / Saathi Login'
+                    : 'Customer Login / ગ્રાહક લૉગિન',
+          style: const TextStyle(color: Colors.white, fontSize: 18),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 32),
+              Text(
+                _isSaathi ? 'સ્વાગત છે સાથી! 🛵'
+                          : 'સ્વાગત છે! 👋',
+                style: const TextStyle(fontSize: 28,
+                  fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text(
+                _isSaathi ? 'Login to start accepting rides'
+                          : 'Login to book rides in your village',
+                style: const TextStyle(fontSize: 14,
+                  color: AppColors.textGrey)),
+              const SizedBox(height: 40),
+
+              // Phone label
+              const Text('મોબાઈલ નંબર / Phone Number',
+                style: TextStyle(fontSize: 13,
+                  color: AppColors.textGrey,
+                  fontWeight: FontWeight.w500)),
+              const SizedBox(height: 8),
+
+              // Phone input with +91 prefix
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 18),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        bottomLeft: Radius.circular(12),
+                      ),
+                      border: Border(
+                        right: BorderSide(color: Colors.grey.shade300)),
+                    ),
+                    child: const Text('+91',
+                      style: TextStyle(fontSize: 16,
+                        fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                      style: const TextStyle(fontSize: 18,
+                        fontWeight: FontWeight.bold),
+                      decoration: const InputDecoration(
+                        hintText: '10 અંકનો નંબર',
+                        border: InputBorder.none,
+                        counterText: '',
+                        contentPadding: EdgeInsets.all(16),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 6),
+              const Text('OTP ચકાસણી માટે',
+                style: TextStyle(fontSize: 12,
+                  color: AppColors.textLight)),
+
+              const Spacer(),
+
+              // Send OTP button
+              SizedBox(
+                width: double.infinity, height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _color),
+                  onPressed: _isLoading ? null : _sendOTP,
+                  child: _isLoading
+                      ? const CircularProgressIndicator(
+                          color: Colors.white)
+                      : const Text('OTP મોકલો / Send OTP',
+                          style: TextStyle(fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Google sign in
+              SizedBox(
+                width: double.infinity, height: 48,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.g_mobiledata,
+                    size: 24, color: Colors.red),
+                  label: const Text('Google સાથે લૉગિન',
+                    style: TextStyle(fontSize: 14)),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.grey.shade300),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _isLoading ? null : _googleSignIn,
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+===================================================
+OTP SCREEN (6 boxes, auto advance, auto submit)
+===================================================
+
+```dart
+class OTPScreen extends StatefulWidget {
+  final String phone;
+  final String verificationId;
+  final String role;
+  const OTPScreen({super.key,
+    required this.phone,
+    required this.verificationId,
+    required this.role});
+  @override
+  State<OTPScreen> createState() => _OTPScreenState();
+}
+
+class _OTPScreenState extends State<OTPScreen> {
+  final _ctrls = List.generate(6, (_) => TextEditingController());
+  final _nodes = List.generate(6, (_) => FocusNode());
+  bool _isLoading = false;
+
+  bool get _isSaathi => widget.role == 'saathi';
+  Color get _color => _isSaathi
+      ? AppColors.primaryOrange : AppColors.primaryGreen;
+  String get _otp => _ctrls.map((c) => c.text).join();
+
+  Future<void> _verify() async {
+    if (_otp.length != 6) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final credential = PhoneAuthProvider.credential(
+        verificationId: widget.verificationId,
+        smsCode: _otp,
+      );
+      final result = await FirebaseAuth.instance
+          .signInWithCredential(credential);
+
+      if (!mounted) return;
+      final uid = result.user!.uid;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(uid).get();
+
+      if (!mounted) return;
+
+      if (!doc.exists) {
+        if (_isSaathi) {
+          _goRemoveAll(const SaathiRegisterScreen());
+        } else {
+          _goRemoveAll(const ProfileSetupScreen());
+        }
+      } else {
+        final role = doc.data()!['role'] as String? ?? 'customer';
+        if (role == 'saathi') {
+          _goRemoveAll(const SaathiMainShell());
+        } else {
+          _goRemoveAll(const CustomerMainShell());
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          e.code == 'invalid-verification-code'
+              ? 'OTP ખોટો છે. ફરી પ્રયાસ કરો.'
+              : 'Error: ${e.message}'),
+      ));
+    }
+  }
+
+  void _goRemoveAll(Widget screen) {
+    Navigator.pushAndRemoveUntil(context,
+      MaterialPageRoute(builder: (_) => screen),
+      (route) => false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: _color,
+        title: const Text('OTP ચકાસો / Verify OTP',
+          style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 32),
+              const Text('OTP દાખલ કરો',
+                style: TextStyle(fontSize: 26,
+                  fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('+91 ${widget.phone} પર OTP મોકલ્યો',
+                style: const TextStyle(fontSize: 14,
+                  color: AppColors.textGrey)),
+              const SizedBox(height: 40),
+
+              // 6 OTP boxes
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(6, (i) => SizedBox(
+                  width: 46, height: 58,
+                  child: TextField(
+                    controller: _ctrls[i],
+                    focusNode: _nodes[i],
+                    textAlign: TextAlign.center,
+                    keyboardType: TextInputType.number,
+                    maxLength: 1,
+                    style: const TextStyle(fontSize: 22,
+                      fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: _color, width: 2)),
+                    ),
+                    onChanged: (val) {
+                      if (val.isNotEmpty && i < 5) {
+                        _nodes[i + 1].requestFocus();
+                      }
+                      if (val.isEmpty && i > 0) {
+                        _nodes[i - 1].requestFocus();
+                      }
+                      if (_otp.length == 6) _verify();
+                    },
+                  ),
+                )),
+              ),
+
+              const Spacer(),
+
+              SizedBox(
+                width: double.infinity, height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _color),
+                  onPressed: _isLoading ? null : _verify,
+                  child: _isLoading
+                      ? const CircularProgressIndicator(
+                          color: Colors.white)
+                      : const Text('ચકાસો / Verify',
+                          style: TextStyle(fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+===================================================
+MODELS
+===================================================
+
+```dart
+// lib/models/ride_model.dart
+class RideModel {
+  final String rideId;
+  final String customerId;
+  final String customerName;
+  final String customerPhone;
+  final String saathiId;
+  final String saathiName;
+  final String saathiPhone;
+  final String pickupVillage;
+  final double pickupLat;
+  final double pickupLng;
+  final String destinationVillage;
+  final double destinationLat;
+  final double destinationLng;
+  final String status; // single value always
+  final double fare;
+  final double distance;
+  final String otp;
+  final double saathiLat;
+  final double saathiLng;
+  final String cancelReason;
+  final int rating;
+  final DateTime? createdAt;
+  final DateTime? acceptedAt;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+
+  // Valid status values
+  static const searching = 'searching';
+  static const accepted = 'accepted';
+  static const arriving = 'arriving';
+  static const started = 'started';
+  static const completed = 'completed';
+  static const cancelled = 'cancelled';
+
+  factory RideModel.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return RideModel(
+      rideId: d['rideId'] ?? doc.id,
+      customerId: d['customerId'] ?? '',
+      customerName: d['customerName'] ?? '',
+      customerPhone: d['customerPhone'] ?? '',
+      saathiId: d['saathiId'] ?? '',
+      saathiName: d['saathiName'] ?? '',
+      saathiPhone: d['saathiPhone'] ?? '',
+      pickupVillage: d['pickupVillage'] ?? '',
+      pickupLat: (d['pickupLat'] ?? 0).toDouble(),
+      pickupLng: (d['pickupLng'] ?? 0).toDouble(),
+      destinationVillage: d['destinationVillage'] ?? '',
+      destinationLat: (d['destinationLat'] ?? 0).toDouble(),
+      destinationLng: (d['destinationLng'] ?? 0).toDouble(),
+      status: d['status'] ?? 'searching',
+      fare: (d['fare'] ?? 0).toDouble(),
+      distance: (d['distance'] ?? 0).toDouble(),
+      otp: d['otp'] ?? '',
+      saathiLat: (d['saathiLat'] ?? 0).toDouble(),
+      saathiLng: (d['saathiLng'] ?? 0).toDouble(),
+      cancelReason: d['cancelReason'] ?? '',
+      rating: (d['rating'] ?? 0).toInt(),
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
+      acceptedAt: (d['acceptedAt'] as Timestamp?)?.toDate(),
+      startedAt: (d['startedAt'] as Timestamp?)?.toDate(),
+      completedAt: (d['completedAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'rideId': rideId,
+    'customerId': customerId,
+    'customerName': customerName,
+    'customerPhone': customerPhone,
+    'saathiId': saathiId,
+    'saathiName': saathiName,
+    'saathiPhone': saathiPhone,
+    'pickupVillage': pickupVillage,
+    'pickupLat': pickupLat,
+    'pickupLng': pickupLng,
+    'destinationVillage': destinationVillage,
+    'destinationLat': destinationLat,
+    'destinationLng': destinationLng,
+    'status': status,
+    'fare': fare,
+    'distance': distance,
+    'otp': otp,
+    'saathiLat': saathiLat,
+    'saathiLng': saathiLng,
+    'cancelReason': cancelReason,
+    'rating': rating,
+    'createdAt': FieldValue.serverTimestamp(),
+  };
+}
+```
+
+===================================================
+FARE CALCULATOR (fixes ₹106901 bug)
+===================================================
+
+```dart
+// lib/utils/fare_calculator.dart
+class FareCalculator {
+
+  static double calculate({
+    required double distanceMeters, // INPUT IS METERS from Geolocator
+    required Map<String, dynamic> settings,
+  }) {
+    // CRITICAL: Convert meters to km first
+    final distanceKm = distanceMeters / 1000;
+
+    final base = (settings['rideFareBase'] ?? 20).toDouble();
+    final perKm = (settings['rideFarePerKm'] ?? 8).toDouble();
+    final min = (settings['rideFareMinimum'] ?? 25).toDouble();
+    final max = (settings['rideFareMaximum'] ?? 200).toDouble();
+
+    // Validate
+    if (distanceKm <= 0 || distanceKm > 50) return min;
+
+    double fare = base + (distanceKm * perKm);
+    fare = fare.clamp(min, max);
+
+    // Round to nearest ₹5
+    return (fare / 5).round() * 5.0;
+  }
+
+  // Haul — flat commission
+  static double haulCommission(Map<String, dynamic> settings) {
+    return (settings['haulCommission'] ?? 75).toDouble();
+  }
+
+  // Owner earnings estimate
+  static double ownerEarnings(int ratePerHour, String duration) {
+    const hours = {
+      '1h': 1.0, '2h': 2.0,
+      'half_day': 4.0, 'full_day': 8.0
+    };
+    return ratePerHour * (hours[duration] ?? 1.0);
+  }
+
+  static String format(double fare) => '₹${fare.toStringAsFixed(0)}';
+}
+
+// Usage in customer_home_screen.dart:
+// final distanceMeters = Geolocator.distanceBetween(
+//   userLat, userLng, destLat, destLng);
+// final fare = FareCalculator.calculate(
+//   distanceMeters: distanceMeters, settings: _settings);
+```
+
+===================================================
+SERVICES
+===================================================
+
+```dart
+// lib/services/settings_service.dart
+class SettingsService {
+  static AppSettingsModel? _cached;
+
+  static Future<AppSettingsModel> getSettings() async {
+    if (_cached != null) return _cached!;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('app_settings').doc('config').get();
+      if (doc.exists) {
+        _cached = AppSettingsModel.fromFirestore(doc.data()!);
+        return _cached!;
+      }
+    } catch (_) {}
+    return AppSettingsModel.defaults();
+  }
+
+  static void clearCache() => _cached = null;
+}
+
+// lib/services/village_service.dart
+class VillageService {
+  static List<VillageModel>? _cached;
+
+  static final _fallback = [
+    VillageModel(id:'anaval', name:'Anaval', nameGu:'આણવલ',
+      lat:20.8394, lng:73.2637),
+    VillageModel(id:'kos', name:'Kos', nameGu:'કૉસ',
+      lat:20.8480, lng:73.2350),
+    VillageModel(id:'tarkani', name:'Tarkani', nameGu:'તારકણી',
+      lat:20.8550, lng:73.2580),
+    VillageModel(id:'angaldhara', name:'Angaldhara', nameGu:'અંગળધરા',
+      lat:20.8180, lng:73.2280),
+    VillageModel(id:'dholikuva', name:'Dholikuva', nameGu:'ઢોળીકૂવા',
+      lat:20.8650, lng:73.2800),
+    VillageModel(id:'lakhavadi', name:'Lakhavadi', nameGu:'લખાવડી',
+      lat:20.8050, lng:73.2150),
+    VillageModel(id:'unai', name:'Unai', nameGu:'ઉનાઈ',
+      lat:20.8550, lng:73.2100),
+    VillageModel(id:'doldha', name:'Doldha', nameGu:'ડોળધા',
+      lat:20.7950, lng:73.2600),
+    VillageModel(id:'kamboya', name:'Kamboya', nameGu:'કાંબોયા',
+      lat:20.8750, lng:73.2200),
+  ];
+
+  static Future<List<VillageModel>> getVillages() async {
+    if (_cached != null) return _cached!;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('villages')
+          .where('isActive', isEqualTo: true)
+          .get();
+      if (snap.docs.isNotEmpty) {
+        _cached = snap.docs
+            .map((d) => VillageModel.fromFirestore(d))
+            .toList();
+        return _cached!;
+      }
+    } catch (_) {}
+    _cached = _fallback;
+    return _fallback;
+  }
+
+  static VillageModel nearest(double lat, double lng,
+      List<VillageModel> villages) {
+    return villages.reduce((a, b) {
+      final da = Geolocator.distanceBetween(lat, lng, a.lat, a.lng);
+      final db = Geolocator.distanceBetween(lat, lng, b.lat, b.lng);
+      return da < db ? a : b;
+    });
+  }
+}
+
+// lib/services/ride_service.dart
+class RideService {
+  static final _rides = FirebaseFirestore.instance.collection('rides');
+
+  static Future<String> createRide({
+    required String customerId,
+    required String customerName,
+    required String customerPhone,
+    required String pickupVillage,
+    required double pickupLat,
+    required double pickupLng,
+    required String destinationVillage,
+    required double destinationLat,
+    required double destinationLng,
+    required double fare,
+    required double distance,
+  }) async {
+    final ref = _rides.doc();
+    final otp = OTPGenerator.generate();
+    await ref.set({
+      'rideId': ref.id,
+      'customerId': customerId,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+      'saathiId': '',
+      'saathiName': '',
+      'saathiPhone': '',
+      'pickupVillage': pickupVillage,
+      'pickupLat': pickupLat,
+      'pickupLng': pickupLng,
+      'destinationVillage': destinationVillage,
+      'destinationLat': destinationLat,
+      'destinationLng': destinationLng,
+      'status': 'searching', // ALWAYS single value
+      'fare': fare,
+      'distance': distance,
+      'otp': otp,
+      'saathiLat': 0.0,
+      'saathiLng': 0.0,
+      'cancelReason': '',
+      'rating': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+      'acceptedAt': null,
+      'startedAt': null,
+      'completedAt': null,
+    });
+    return ref.id;
+  }
+
+  static Future<void> acceptRide(String rideId,
+      String saathiId, String saathiName, String saathiPhone) async {
+    await _rides.doc(rideId).update({
+      'saathiId': saathiId,
+      'saathiName': saathiName,
+      'saathiPhone': saathiPhone,
+      'status': 'accepted',
+      'acceptedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<void> updateSaathiLocation(
+      String rideId, double lat, double lng) async {
+    await _rides.doc(rideId).update({
+      'saathiLat': lat,
+      'saathiLng': lng,
+    });
+  }
+
+  static Future<void> saathiArrived(String rideId) async {
+    await _rides.doc(rideId).update({'status': 'arriving'});
+  }
+
+  static Future<void> startRide(String rideId) async {
+    await _rides.doc(rideId).update({
+      'status': 'started',
+      'startedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<void> completeRide(
+      String rideId, String saathiId) async {
+    await _rides.doc(rideId).update({
+      'status': 'completed',
+      'completedAt': FieldValue.serverTimestamp(),
+    });
+    await FirebaseFirestore.instance
+        .collection('saathis').doc(saathiId)
+        .update({'totalRides': FieldValue.increment(1)});
+  }
+
+  static Future<void> cancelRide(
+      String rideId, String reason) async {
+    await _rides.doc(rideId).update({
+      'status': 'cancelled',
+      'cancelReason': reason,
+    });
+  }
+
+  static Future<void> rateRide(String rideId,
+      String saathiId, int rating, int totalRides,
+      double currentRating) async {
+    await _rides.doc(rideId).update({'rating': rating});
+    final newAvg = ((currentRating * totalRides) + rating)
+        / (totalRides + 1);
+    await FirebaseFirestore.instance
+        .collection('saathis').doc(saathiId)
+        .update({'rating': newAvg});
+  }
+
+  static Stream<DocumentSnapshot> watchRide(String rideId) {
+    return _rides.doc(rideId).snapshots();
+  }
+
+  static Stream<QuerySnapshot> watchIncomingRides() {
+    return _rides
+        .where('status', isEqualTo: 'searching')
+        .orderBy('createdAt', descending: true)
+        .limit(5)
+        .snapshots();
+  }
+
+  static Future<List<QueryDocumentSnapshot>> getCustomerHistory(
+      String customerId) async {
+    final snap = await _rides
+        .where('customerId', isEqualTo: customerId)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .get();
+    return snap.docs;
+  }
+
+  static Future<List<QueryDocumentSnapshot>> getSaathiHistory(
+      String saathiId) async {
+    final snap = await _rides
+        .where('saathiId', isEqualTo: saathiId)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .get();
+    return snap.docs;
+  }
+
+  static Future<Map<String, dynamic>> getSaathiEarnings(
+      String saathiId) async {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final weekStart = todayStart.subtract(
+        Duration(days: now.weekday - 1));
+    final monthStart = DateTime(now.year, now.month, 1);
+
+    final snap = await _rides
+        .where('saathiId', isEqualTo: saathiId)
+        .where('status', isEqualTo: 'completed')
+        .get();
+
+    double todayEarnings = 0;
+    double weekEarnings = 0;
+    double monthEarnings = 0;
+    int todayRides = 0;
+
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final fare = (data['fare'] ?? 0).toDouble();
+      final completedAt =
+          (data['completedAt'] as Timestamp?)?.toDate();
+      if (completedAt == null) continue;
+
+      if (completedAt.isAfter(monthStart)) monthEarnings += fare;
+      if (completedAt.isAfter(weekStart)) weekEarnings += fare;
+      if (completedAt.isAfter(todayStart)) {
+        todayEarnings += fare;
+        todayRides++;
+      }
+    }
+
+    return {
+      'today': todayEarnings,
+      'week': weekEarnings,
+      'month': monthEarnings,
+      'todayRides': todayRides,
+      'totalRides': snap.docs.length,
+    };
+  }
+}
+```
+
+===================================================
+SAATHI DASHBOARD — complete with earnings + requests
+===================================================
+
+Build saathi_dashboard.dart with:
+
+1. AppBar: "Gaam Saathi" title + logout icon button
+
+2. Profile card at top:
+   - Avatar circle with first letter of name
+   - Name (bold), vehicle type + village (grey)
+   - Star rating display
+
+3. BIG Online/Offline toggle card:
+   - When ONLINE: green card, "Online — રાઈડ મળી શકે"
+     subtitle "GPS live update active"
+   - When OFFLINE: grey card, "Offline"
+   When toggled ON:
+   - Request location permission
+   - Start location stream (every 10 sec update saathis/{uid})
+   - Listen to rides collection for incoming requests
+   When toggled OFF:
+   - Stop location stream
+   - Update saathis/{uid} isAvailable:false, isOnline:false
+
+4. Earnings cards row (reads from RideService.getSaathiEarnings):
+   - Today: ₹XXX (X rides)
+   - This week: ₹XXX
+   - This month: ₹XXX
+
+5. "Incoming Requests" section:
+   StreamBuilder on RideService.watchIncomingRides()
+   Each request shows as a card:
+   - Customer name + pickup → destination
+   - Distance + estimated fare
+   - ACCEPT button (green, full width)
+   - REJECT button (outlined, smaller)
+   - 30 second countdown timer that auto-dismisses
+
+   When ACCEPT tapped:
+   - Call RideService.acceptRide(...)
+   - Navigate to SaathiRideScreen(rideId: ...)
+
+6. Recent rides (last 5) from getSaathiHistory
+
+Location stream (when online):
+```dart
+_locationStream = Geolocator.getPositionStream(
+  locationSettings: const LocationSettings(
+    accuracy: LocationAccuracy.high,
+    distanceFilter: 20,
+  ),
+).listen((pos) async {
+  // Update saathis collection for discovery
+  final geo = GeoFirePoint(pos.latitude, pos.longitude);
+  await FirebaseFirestore.instance
+      .collection('saathis').doc(_uid)
+      .update({
+        'position': geo.data,
+        'lastSeen': FieldValue.serverTimestamp(),
+        'isAvailable': true,
+        'isOnline': true,
+      });
+
+  // If in active ride, also update ride document
+  if (_activeRideId != null) {
+    await RideService.updateSaathiLocation(
+        _activeRideId!, pos.latitude, pos.longitude);
+  }
+});
+```
+
+===================================================
+CUSTOMER HOME SCREEN — smart saathi matching
+===================================================
+
+Build customer_home_screen.dart with:
+
+1. AppBar: "GaamRide" title + settings icon
+
+2. Auto-detected location card:
+   - GPS icon (green)
+   - "તમારું સ્થાન / Your Location" label
+   - Shows nearest village name
+   - Refresh button to re-detect
+
+3. Arrow down icon
+
+4. Destination selector card (tappable):
+   - Flag icon (orange)
+   - "ક્યાં જવું છે? / Where to go?" label
+   - Selected village or "ગામ પસંદ કરો / Select Village"
+   - Arrow right icon
+
+5. Fare estimate row (shows after destination selected):
+   - "અંદાજિત ભાડું / Estimated Fare: ₹XX"
+   - Distance: "X.X km"
+
+6. "સાથી શોધો / Find Saathi" button
+   - Disabled until destination selected
+   - On tap: geo query + smart sort
+
+7. Results section (after search):
+   Smart sort order:
+   a. Same village as customer FIRST (show "PREFERRED" badge)
+   b. Then by distance ascending
+   c. Then by rating descending
+
+   SaathiCard for each:
+   - Name, vehicle type badge, rating stars
+   - Distance + ETA (distanceKm/25*60 minutes)
+   - "PREFERRED" green badge if same village
+   - "બુક કરો / Book" button → creates ride + navigates
+
+Village selector bottom sheet:
+- Search box at top
+- List of 9 villages with Gujarati + English names
+- Cannot select same as current location
+
+===================================================
+RIDE TRACKING SCREEN — real-time map
+===================================================
+
+Build ride_tracking_screen.dart with:
+
+Full screen Google Map (fills entire screen)
+Stack layers:
+  Layer 1: GoogleMap widget (fills screen)
+  Layer 2: Top status bar (semi-transparent)
+  Layer 3: Bottom info card (slides up)
+  Layer 4: SOS button (top right, red)
+
+Map markers:
+  Customer: blue circle (static, user's pickup location)
+  Saathi: green bike icon (ANIMATED, updates from Firestore)
+
+Real-time listener:
+```dart
+_rideSubscription = RideService.watchRide(rideId)
+    .listen((snap) {
+  final ride = RideModel.fromFirestore(snap);
+
+  // Animate saathi marker
+  if (ride.saathiLat != 0 && ride.saathiLng != 0) {
+    _animateMarker(LatLng(ride.saathiLat, ride.saathiLng));
+  }
+
+  // Update status UI
+  setState(() { _status = ride.status; });
+
+  // Navigate on completion
+  if (ride.status == 'completed') {
+    _rideSubscription?.cancel();
+    Navigator.pushReplacement(context,
+      MaterialPageRoute(builder: (_) =>
+        RideCompleteScreen(ride: ride)));
+  }
+  if (ride.status == 'cancelled') {
+    _showCancelDialog(ride.cancelReason);
+  }
+});
+```
+
+Status progression UI (bottom card changes):
+  searching → "સાથી શોધી રહ્યા છીએ..."
+  accepted  → "સાથી આવી રહ્યા છે · ${eta} min"
+  arriving  → "સાથી પહોંચ્યા! OTP: ${ride.otp}" (show big OTP)
+  started   → "સવારી શરૂ · ${destination}ity"
+  completed → navigate to RideCompleteScreen
+
+Smooth marker animation:
+```dart
+void _animateMarker(LatLng newPos) {
+  final start = _saathiPos;
+  const steps = 30;
+  int step = 0;
+  Timer.periodic(const Duration(milliseconds: 33), (t) {
+    if (++step >= steps) { t.cancel(); return; }
+    final r = step / steps;
+    if (!mounted) { t.cancel(); return; }
+    setState(() {
+      _saathiPos = LatLng(
+        start.latitude + (newPos.latitude - start.latitude) * r,
+        start.longitude + (newPos.longitude - start.longitude) * r,
+      );
+      _updateMarkers();
+    });
+  });
+}
+```
+
+SOS button:
+```dart
+// Red floating button top-right
+Positioned(
+  top: 60, right: 16,
+  child: FloatingActionButton.small(
+    backgroundColor: AppColors.sosRed,
+    child: const Text('SOS',
+      style: TextStyle(color: Colors.white,
+        fontWeight: FontWeight.bold, fontSize: 12)),
+    onPressed: () => _showSOSDialog(),
+  ),
+)
+
+void _showSOSDialog() {
+  showDialog(context: context, builder: (_) => AlertDialog(
+    title: const Text('🚨 Emergency / ઈમર્જન્સી'),
+    actions: [
+      TextButton(
+        child: const Text('112 Call'),
+        onPressed: () => launchUrl(Uri.parse('tel:112')),
+      ),
+      TextButton(
+        child: const Text('WhatsApp Location'),
+        onPressed: () => _shareLocationWhatsApp(),
+      ),
+    ],
+  ));
+}
+```
+
+===================================================
+SAATHI REGISTER SCREEN
+===================================================
+
+SaathiRegisterScreen saves to BOTH collections:
+
+```dart
+Future<void> _save() async {
+  if (!_formKey.currentState!.validate()) return;
+  if (_selectedVehicle == null || _selectedVillage == null) return;
+
+  setState(() => _isLoading = true);
+  final uid = FirebaseAuth.instance.currentUser!.uid;
+  final phone = FirebaseAuth.instance.currentUser!.phoneNumber ?? '';
+
+  final batch = FirebaseFirestore.instance.batch();
+
+  // Save to users collection
+  batch.set(
+    FirebaseFirestore.instance.collection('users').doc(uid),
+    {
+      'uid': uid,
+      'name': _nameCtrl.text.trim(),
+      'displayName': _nameCtrl.text.trim(),
+      'phone': phone,
+      'role': 'saathi', // SINGLE VALUE, no pipes
+      'village': _selectedVillage!,
+      'profilePhoto': '',
+      'fcmToken': '',
+      'isBlocked': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    },
+  );
+
+  // Save to saathis collection
+  batch.set(
+    FirebaseFirestore.instance.collection('saathis').doc(uid),
+    {
+      'uid': uid,
+      'name': _nameCtrl.text.trim(),
+      'phone': phone,
+      'village': _selectedVillage!,
+      'vehicleType': _selectedVehicle!,
+      'vehicleNumber': _vehicleNumCtrl.text.trim(),
+      'isAvailable': false,
+      'isOnline': false,
+      'isBlocked': false,
+      'rating': 5.0,
+      'totalRides': 0,
+      'fcmToken': '',
+      'position': {
+        'geohash': '',
+        'geopoint': const GeoPoint(0, 0),
+      },
+      'lastSeen': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    },
+  );
+
+  await batch.commit();
+
+  if (!mounted) return;
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(builder: (_) => const SaathiMainShell()),
+    (route) => false,
+  );
+}
+```
+
+===================================================
+MAINTENANCE SCREEN
+===================================================
+
+```dart
+class MaintenanceScreen extends StatelessWidget {
+  const MaintenanceScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.build_circle_outlined,
+                size: 80, color: AppColors.primaryOrange),
+              const SizedBox(height: 24),
+              const Text('GaamRide અપડેટ થઈ રહ્યું છે',
+                style: TextStyle(fontSize: 22,
+                  fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              const Text(
+                'We are updating the app.\nPlease check back shortly.',
+                style: TextStyle(fontSize: 14,
+                  color: AppColors.textGrey),
+                textAlign: TextAlign.center),
+              const SizedBox(height: 40),
+              // Auto check every 30 seconds
+              StreamBuilder(
+                stream: Stream.periodic(
+                  const Duration(seconds: 30)),
+                builder: (_, __) {
+                  _checkMaintenance(context);
+                  return const CircularProgressIndicator(
+                    color: AppColors.primaryGreen);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _checkMaintenance(BuildContext context) async {
+    final settings = await SettingsService.getSettings();
+    SettingsService.clearCache();
+    if (!settings.maintenanceMode) {
+      Navigator.pushAndRemoveUntil(context,
+        MaterialPageRoute(builder: (_) => const SplashScreen()),
+        (route) => false);
+    }
+  }
+}
+```
+
+===================================================
+CUSTOMER MAIN SHELL (bottom nav)
+===================================================
+
+```dart
+class CustomerMainShell extends StatefulWidget {
+  const CustomerMainShell({super.key});
+  @override
+  State<CustomerMainShell> createState() => _CustomerMainShellState();
+}
+
+class _CustomerMainShellState extends State<CustomerMainShell> {
+  int _index = 0;
+
+  final _screens = const [
+    CustomerHomeScreen(),
+    GaamHaulHomeScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(index: _index, children: _screens),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _index,
+        onTap: (i) => setState(() => _index = i),
+        selectedItemColor: _index == 0
+            ? AppColors.primaryGreen : AppColors.primaryOrange,
+        unselectedItemColor: AppColors.textGrey,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.directions_bike_outlined),
+            activeIcon: Icon(Icons.directions_bike),
+            label: 'GaamRide',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.local_shipping_outlined),
+            activeIcon: Icon(Icons.local_shipping),
+            label: 'GaamHaul',
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+===================================================
+SAATHI MAIN SHELL (NO bottom nav)
+===================================================
+
+```dart
+class SaathiMainShell extends StatelessWidget {
+  const SaathiMainShell({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SaathiDashboard();
+    // SaathiDashboard has its own AppBar + Drawer
+    // No bottom navigation for Saathi
+  }
+}
+```
+
+===================================================
+FIRESTORE RULES
+===================================================
+
+Paste in Firebase Console → Firestore → Rules:
+
+rules_version = '2';
+service cloud.firestore {
+match /databases/{database}/documents {
+match /users/{userId} {
+  allow read, write: if request.auth != null
+                     && request.auth.uid == userId;
+}
+
+match /saathis/{saathiId} {
+  allow read: if request.auth != null;
+  allow write: if request.auth != null
+               && request.auth.uid == saathiId;
+}
+
+match /rides/{rideId} {
+  allow read, write: if request.auth != null;
+}
+
+match /haul_bookings/{bookingId} {
+  allow read, write: if request.auth != null;
+}
+
+match /haul_vehicles/{ownerId} {
+  allow read: if request.auth != null;
+  allow write: if request.auth != null
+               && request.auth.uid == ownerId;
+}
+
+match /villages/{villageId} {
+  allow read: if request.auth != null;
+  allow write: if false;
+}
+
+match /app_settings/{doc} {
+  allow read: if request.auth != null;
+  allow write: if false;
+}
+
+match /sos_alerts/{alertId} {
+  allow read, write: if request.auth != null;
+}
+
+
+===================================================
+ANDROID MANIFEST ADDITIONS
+===================================================
+
+Add to mobile/android/app/src/main/AndroidManifest.xml
+inside <manifest> tag:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+<uses-permission android:name="android.permission.CALL_PHONE"/>
+<uses-permission android:name="android.permission.VIBRATE"/>
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+```
+
+Inside <application> tag:
+```xml
+<meta-data
+  android:name="com.google.android.geo.API_KEY"
+  android:value="YOUR_GOOGLE_MAPS_API_KEY"/>
+```
+
+===================================================
+BUILD ORDER — implement exactly in this sequence
+===================================================
+
+1. Create Flutter project in /mobile folder
+2. Add all pubspec.yaml dependencies, run flutter pub get
+3. Add Firebase (google-services.json + firebase_options.dart)
+4. Create constants/ files (AppColors, AppStrings)
+5. Create all models/ files
+6. Create all services/ files
+7. Build pre-login screens:
+   SplashScreen → WelcomeScreen → LoginScreen → OTPScreen
+8. Build registration screens:
+   ProfileSetupScreen, SaathiRegisterScreen
+9. Build shells:
+   CustomerMainShell, SaathiMainShell
+10. Build CustomerHomeScreen (full with smart saathi matching)
+11. Build SaathiDashboard (full with earnings + incoming requests)
+12. Build RideRequestScreen (searching animation)
+13. Build RideTrackingScreen (real-time map, SOS button)
+14. Build SaathiRideScreen (OTP verify + complete)
+15. Build RideCompleteScreen + RatingScreen
+16. Build RideHistoryScreen (both customer + saathi)
+17. Build GaamHaulHomeScreen
+18. Build HaulConfirmScreen, HaulRequestScreen, HaulTrackingScreen
+19. Build earnings screens
+20. Final testing of complete flow
+
+===================================================
+UNIQUE FEATURES SUMMARY
+===================================================
+
+1. SOS Button — red button on tracking screen
+   → Calls 112 OR shares live location via WhatsApp
+
+2. Smart Village Matching — shows "PREFERRED" saathis
+   from customer's own village first
+
+3. Earnings Tracker — today/week/month in saathi dashboard
+
+4. Maintenance Mode — reads from Firestore, blocks app if true
+
+5. Live Fare from Firestore — fare rules in app_settings,
+   change price without app update
+
+6. Village Boundary from Firestore — zone coordinates in
+   app_settings, not hardcoded
+
+7. 30-second auto-dismiss on ride requests for Saathi
+   (prevents stale requests showing)
+
+8. Smooth marker animation (30 steps, 33ms interval)
+   for professional tracking feel
+
+===================================================
+IMPORTANT RULES FOR CODE GENERATION
+===================================================
+
+1. status field in rides: ALWAYS single string value
+   NEVER use pipe characters like "searching|accepted"
+
+2. role field in users: ALWAYS single string
+   "customer" OR "saathi" OR "both"
+   NEVER "customer | saathi | both"
+
+3. duration in haul_bookings: ALWAYS single string
+   "1h" OR "2h" OR "half_day" OR "full_day"
+
+4. distance calculation: Geolocator returns METERS
+   Always divide by 1000 before fare calculation
+   distanceKm = distanceMeters / 1000
+
+5. Navigation after login: ALWAYS pushAndRemoveUntil
+   Never push (prevents back button to login)
+
+6. Saathi location: ONLY update from real GPS
+   In debug mode provide "Set Test Location" button
+   that sets location to Anaval (20.8394, 73.2637)
+
+Generate ALL files with COMPLETE working code.
+No placeholder comments. No TODO items.
+Real production-ready Flutter code only.
+Every screen fully implemented.
