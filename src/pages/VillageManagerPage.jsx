@@ -22,8 +22,12 @@ const EMPTY_FORM = { name: '', nameGu: '', lat: '', lng: '', taluka: 'Mahuva', i
 
 function validateCoords(lat, lng) {
   const la = Number(lat), lo = Number(lng)
-  if (la < 20.0 || la > 22.0) return 'Latitude must be between 20.0 and 22.0'
-  if (lo < 72.0 || lo > 74.5) return 'Longitude must be between 72.0 and 74.5'
+  const minLat = 20.70, maxLat = 20.95
+  const minLng = 73.15, maxLng = 73.38
+  if (la < minLat || la > maxLat)
+    return `⚠️ Latitude must be ${minLat}–${maxLat} (GaamRide service zone)`
+  if (lo < minLng || lo > maxLng)
+    return `⚠️ Longitude must be ${minLng}–${maxLng} (GaamRide service zone)`
   return null
 }
 

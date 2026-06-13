@@ -20,6 +20,8 @@ class RideModel {
   final String otp;
   final double saathiLat;
   final double saathiLng;
+  final String vehicleType;
+  final double? distanceMeters;
   final String cancelReason;
   final int rating;
   final DateTime? createdAt;
@@ -52,6 +54,8 @@ class RideModel {
     required this.fare,
     required this.distance,
     required this.otp,
+    this.vehicleType = '',
+    this.distanceMeters,
     this.saathiLat = 0,
     this.saathiLng = 0,
     this.cancelReason = '',
@@ -84,6 +88,8 @@ class RideModel {
       otp: d['otp'] ?? '',
       saathiLat: (d['saathiLat'] ?? 0).toDouble(),
       saathiLng: (d['saathiLng'] ?? 0).toDouble(),
+      vehicleType: d['vehicleType'] ?? '',
+      distanceMeters: (d['distanceMeters'] ?? d['distance'])?.toDouble(),
       cancelReason: d['cancelReason'] ?? '',
       rating: (d['rating'] ?? 0).toInt(),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),

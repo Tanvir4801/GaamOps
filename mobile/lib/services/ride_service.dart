@@ -121,6 +121,29 @@ class RideService {
         .update({'rating': newAvg});
   }
 
+  static Future<void> submitRating({
+    required String rideId,
+    required String saathiId,
+    required double rating,
+    List<String> tags = const [],
+  }) async {
+    await _rides.doc(rideId).update({'rating': rating, 'ratingTags': tags});
+    final saathiDoc = await FirebaseFirestore.instance
+        .collection('saathis')
+        .doc(saathiId)
+        .get();
+    if (saathiDoc.exists) {
+      final data = saathiDoc.data()!;
+      final currentRating = (data['rating'] ?? 5.0).toDouble();
+      final totalRides = (data['totalRides'] ?? 1).toInt();
+      final newAvg = ((currentRating * totalRides) + rating) / (totalRides + 1);
+      await FirebaseFirestore.instance
+          .collection('saathis')
+          .doc(saathiId)
+          .update({'rating': newAvg});
+    }
+  }
+
   static Stream<DocumentSnapshot> watchRide(String rideId) {
     return _rides.doc(rideId).snapshots();
   }

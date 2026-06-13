@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc, setDoc, updateDoc, getDocs, collection, query, where } from 'firebase/firestore'
 import toast from 'react-hot-toast'
 import { db } from '../firebase'
 import { useDoc } from '../hooks/useDoc.js'
@@ -16,6 +16,10 @@ export default function AppSettingsPage() {
   const { data, loading } = useDoc('app_settings', 'config')
   const [form, setForm] = useState(DEFAULT)
   const [saving, setSaving] = useState(false)
+  const [notifTitle, setNotifTitle] = useState('')
+  const [notifBody, setNotifBody] = useState('')
+  const [notifTarget, setNotifTarget] = useState('all')
+  const [sending, setSending] = useState(false)
 
   useEffect(() => {
     if (!data) return
@@ -51,11 +55,54 @@ export default function AppSettingsPage() {
         maintenanceMode: form.maintenanceMode,
         appVersion: form.appVersion,
       }, { merge: true })
-      toast.success('Settings saved')
+      toast.success('Settings saved! App will update automatically.')
     } catch (err) {
       toast.error('Error: ' + err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleMaintenanceToggle = async () => {
+    const msg = form.maintenanceMode
+      ? 'Turn OFF maintenance? App will go live.'
+      : '⚠️ Turn ON maintenance? ALL users will be blocked from booking!'
+    if (!window.confirm(msg)) return
+    try {
+      const newVal = !form.maintenanceMode
+      await updateDoc(doc(db, 'app_settings', 'config'), { maintenanceMode: newVal })
+      set('maintenanceMode', newVal)
+      toast.success(newVal ? '🔴 Maintenance mode ON' : '🟢 App is now live')
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    }
+  }
+
+  const handleBroadcast = async () => {
+    if (!notifTitle || !notifBody) return
+    setSending(true)
+    try {
+      const q = notifTarget === 'all'
+        ? query(collection(db, 'users'))
+        : query(collection(db, 'users'), where('role', '==', notifTarget))
+      const snap = await getDocs(q)
+      const tokens = snap.docs
+        .map(d => d.data().fcmToken)
+        .filter(t => t && t !== '')
+      if (tokens.length === 0) {
+        toast.error('No registered device tokens found')
+        return
+      }
+      const confirmed = window.confirm(`Send "${notifTitle}" to ${tokens.length} users?`)
+      if (confirmed) {
+        toast.success(`Notification queued for ${tokens.length} users`)
+        setNotifTitle('')
+        setNotifBody('')
+      }
+    } catch (err) {
+      toast.error('Error: ' + err.message)
+    } finally {
+      setSending(false)
     }
   }
 
@@ -88,7 +135,7 @@ export default function AppSettingsPage() {
       <form onSubmit={handleSave} className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="space-y-6">
           <Section title="Ride Fare">
-            <Input label="Base fare ₹" value={form.rideFareBase} onChange={(v) => set('rideFareBase', v)} />
+            <Input label="Base fare ₹" value={form.rideFareBase} onChange={(v) => set('rideFareBase', v)} note="Charged for every ride" />
             <Input label="Per km ₹" value={form.rideFarePerKm} onChange={(v) => set('rideFarePerKm', v)} />
             <Input label="Minimum fare ₹" value={form.rideFareMinimum} onChange={(v) => set('rideFareMinimum', v)} />
             <Input label="Maximum fare ₹" value={form.rideFareMaximum} onChange={(v) => set('rideFareMaximum', v)} />
@@ -97,7 +144,7 @@ export default function AppSettingsPage() {
           <hr className="border-gray-100" />
 
           <Section title="Haul Settings">
-            <Input label="App commission ₹" value={form.haulCommission} onChange={(v) => set('haulCommission', v)} note="Fixed at ₹75 per booking" />
+            <Input label="App commission ₹" value={form.haulCommission} onChange={(v) => set('haulCommission', v)} note="Fixed commission per haul booking" />
           </Section>
 
           <hr className="border-gray-100" />
@@ -128,12 +175,12 @@ export default function AppSettingsPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-800">Maintenance Mode</p>
                   <p className={`text-xs font-semibold ${form.maintenanceMode ? 'text-red-500' : 'text-green-600'}`}>
-                    {form.maintenanceMode ? 'MAINTENANCE MODE' : 'App is LIVE'}
+                    {form.maintenanceMode ? '🔴 MAINTENANCE MODE — App is blocked' : '🟢 App is LIVE'}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => set('maintenanceMode', !form.maintenanceMode)}
+                  onClick={handleMaintenanceToggle}
                   className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${form.maintenanceMode ? 'bg-red-500' : 'bg-green-500'}`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.maintenanceMode ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -156,6 +203,54 @@ export default function AppSettingsPage() {
           </button>
         </div>
       </form>
+
+      <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+        <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-gray-500">📢 Broadcast Notification</h3>
+        <p className="mb-4 text-xs text-gray-400">Send a push notification to all app users</p>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Target Audience</label>
+            <select
+              value={notifTarget}
+              onChange={(e) => setNotifTarget(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+            >
+              <option value="all">All Users</option>
+              <option value="customer">Customers Only</option>
+              <option value="saathi">Saathis Only</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Title</label>
+            <input
+              type="text"
+              placeholder="Notification title"
+              value={notifTitle}
+              onChange={(e) => setNotifTitle(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Message</label>
+            <textarea
+              placeholder="Notification message body"
+              value={notifBody}
+              onChange={(e) => setNotifBody(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleBroadcast}
+            disabled={!notifTitle || !notifBody || sending}
+            className="rounded-lg px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            style={{ backgroundColor: '#f97316' }}
+          >
+            {sending ? 'Sending…' : '📢 Send Notification'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

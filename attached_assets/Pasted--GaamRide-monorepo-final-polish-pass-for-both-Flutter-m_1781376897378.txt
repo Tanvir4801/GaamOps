@@ -1,0 +1,1150 @@
+
+GaamRide monorepo — final polish pass for both Flutter mobile app 
+(/mobile) and React admin panel (GaamOps). Everything is built.
+Now improve UI/UX, fix edge cases, and add missing production features.
+
+===================================================
+PART 1 — FLUTTER APP FINAL POLISH
+===================================================
+
+## UI/UX IMPROVEMENTS
+
+### 1. Splash Screen — add logo animation
+Replace static logo with animated version:
+```dart
+// Animate logo: scale 0.5 → 1.0 + fade in
+AnimationController with duration 1200ms
+ScaleTransition + FadeTransition together
+After animation completes → auth check
+```
+
+### 2. Welcome Screen — add background design
+Add subtle green wave/pattern at top:
+```dart
+Stack(children: [
+  // Top green curved container
+  Container(
+    height: 280,
+    decoration: BoxDecoration(
+      color: AppColors.primaryGreen,
+      borderRadius: BorderRadius.only(
+        bottomLeft: Radius.circular(60),
+        bottomRight: Radius.circular(60),
+      ),
+    ),
+    child: Center(
+      child: Column(children: [
+        SizedBox(height: 80),
+        Icon(Icons.directions_bike, color: Colors.white, size: 70),
+        Text('GaamRide', style: white bold 32px),
+        Text('ગામનો પોતાનો સાથી', style: white70 16px),
+      ]),
+    ),
+  ),
+  // Buttons at bottom half
+  Positioned(
+    bottom: 0, left: 0, right: 0,
+    child: Padding(
+      padding: EdgeInsets.all(28),
+      child: Column(children: [
+        // Customer button (green)
+        // Saathi button (orange)
+      ]),
+    ),
+  ),
+])
+```
+
+### 3. Customer Home Screen improvements
+
+A. Location card — show village name prominently:Card:
+Row:
+Green dot (pulsing animation when detecting)
+Column:
+Text: "તમારું સ્થાન" (12px grey)
+Text: "Dholikuva" (18px bold green)
+Refresh icon button
+
+
+
+B. Destination card — better visual:
+Card with orange left border (3px):
+Row:
+Orange flag icon
+Column:
+Text: "ક્યાં જવું છે?" (12px grey)
+Text: village name OR "ગામ પસંદ કરો..." (16px)
+Arrow icon
+
+
+
+C. Fare estimate — show prominently:
+Container(orange/green gradient):
+Row:
+₹ icon
+Column:
+Text: "અંદાજિત ભાડું" (12px)
+Text: "₹45" (24px bold)
+Divider vertical
+Column:
+Text: "અંતર" (12px)
+Text: "3.2 km" (16px bold)
+
+
+
+D. Find Saathi button — pulse animation when searching:
+```dart
+// Pulsing effect when button is active
+AnimatedContainer that scales 1.0 → 1.03 → 1.0
+Duration: 1 second, repeat
+```
+
+E. Saathi card — improve layout:
+Card with subtle shadow:
+Row:
+Avatar circle (first letter, green bg)
+Column:
+Row: Name (bold) + PREFERRED badge (if same village)
+Row: Vehicle icon + type + " · " + distance + " · " + ETA
+Row: ⭐ rating number
+Column:
+Book button (green, small)
+Call icon button (outlined)
+
+
+
+
+
+
+
+
+PREFERRED badge:
+```dart
+Container(
+  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+  decoration: BoxDecoration(
+    color: Color(0xFF1B5E20),
+    borderRadius: BorderRadius.circular(20),
+  ),
+  child: Text('⭐ PREFERRED',
+    style: TextStyle(color: Colors.white,
+      fontSize: 10, fontWeight: FontWeight.bold)),
+)
+```
+
+### 4. Village Selector Bottom Sheet — improve
+
+```dart
+showModalBottomSheet(
+  context: context,
+  isScrollControlled: true,
+  backgroundColor: Colors.transparent,
+  builder: (_) => Container(
+    height: MediaQuery.of(context).size.height * 0.75,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    child: Column(children: [
+      // Handle bar
+      Container(
+        margin: EdgeInsets.only(top: 12),
+        width: 40, height: 4,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+      Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('ક્યાં જવું છે? / Where to go?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      ),
+      // Search box
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: TextField(
+          decoration: InputDecoration(
+            prefixIcon: Icon(Icons.search),
+            hintText: 'ગામ શોધો / Search village',
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          onChanged: (val) => setState(() => _filter = val),
+        ),
+      ),
+      SizedBox(height: 8),
+      // Village list
+      Expanded(
+        child: ListView.builder(
+          itemBuilder: (_, i) {
+            final v = filtered[i];
+            final isCurrentVillage = v.name == _currentVillage;
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: isCurrentVillage
+                    ? Colors.grey.shade200
+                    : AppColors.bgGreen,
+                child: Text(v.nameGu[0],
+                  style: TextStyle(
+                    color: isCurrentVillage
+                        ? Colors.grey : AppColors.primaryGreen,
+                    fontWeight: FontWeight.bold)),
+              ),
+              title: Text(v.nameGu,
+                style: TextStyle(fontWeight: FontWeight.w500)),
+              subtitle: Text(v.name),
+              trailing: isCurrentVillage
+                  ? Chip(label: Text('તમે અહીં છો',
+                      style: TextStyle(fontSize: 10)))
+                  : null,
+              enabled: !isCurrentVillage,
+              onTap: isCurrentVillage ? null : () {
+                Navigator.pop(context, v);
+              },
+            );
+          },
+        ),
+      ),
+    ]),
+  ),
+);
+```
+
+### 5. Ride Request Screen — better animation
+
+```dart
+// Pulsing circle animation while searching
+class _PulsingCircle extends StatefulWidget {}
+// 3 concentric circles that pulse outward
+// Center: bike icon
+// Text below: "સાથી શોધી રહ્યા છીએ..."
+// Subtext: "Finding Saathi near you"
+// Timer: shows elapsed seconds
+// Cancel button at bottom
+
+Stack(children: [
+  // Outer pulse circle (largest, most transparent)
+  AnimatedPulseCircle(size: 200, opacity: 0.1, delay: 0),
+  // Middle pulse circle
+  AnimatedPulseCircle(size: 150, opacity: 0.2, delay: 300),
+  // Inner circle (solid green)
+  Container(
+    width: 100, height: 100,
+    decoration: BoxDecoration(
+      color: AppColors.primaryGreen,
+      shape: BoxShape.circle,
+    ),
+    child: Icon(Icons.directions_bike, color: Colors.white, size: 50),
+  ),
+])
+
+// 2-minute timeout
+// After 120 seconds show:
+// "કોઈ સાથી મળ્યો નહીં"
+// "No Saathi available right now"
+// [ફરી પ્રયાસ] [રદ કરો] buttons
+```
+
+### 6. Ride Tracking Screen — polish
+
+A. Status banner at top (translucent):
+```dart
+Positioned(
+  top: 0, left: 0, right: 0,
+  child: Container(
+    padding: EdgeInsets.fromLTRB(16, 
+      MediaQuery.of(context).padding.top + 8, 16, 12),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.black54, Colors.transparent],
+      ),
+    ),
+    child: Row(children: [
+      BackButton(color: Colors.white),
+      Expanded(
+        child: Text(statusText,
+          style: TextStyle(color: Colors.white,
+            fontSize: 16, fontWeight: FontWeight.bold)),
+      ),
+      // SOS button
+      GestureDetector(
+        onTap: _showSOS,
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.sosRed,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text('SOS 🆘',
+            style: TextStyle(color: Colors.white,
+              fontWeight: FontWeight.bold)),
+        ),
+      ),
+    ]),
+  ),
+)
+```
+
+B. Bottom info card:
+```dart
+Positioned(
+  bottom: 0, left: 0, right: 0,
+  child: Container(
+    padding: EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(24)),
+      boxShadow: [BoxShadow(
+        color: Colors.black12, blurRadius: 20)],
+    ),
+    child: Column(mainAxisSize: MainAxisSize.min,
+      children: [
+        // Handle
+        Container(width: 40, height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(2))),
+        SizedBox(height: 16),
+        Row(children: [
+          // Saathi avatar
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: AppColors.bgGreen,
+            child: Text(saathiName[0],
+              style: TextStyle(fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primaryGreen)),
+          ),
+          SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(saathiName, style: TextStyle(
+                fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(vehicleType + ' · ' + eta,
+                style: TextStyle(color: AppColors.textGrey)),
+            ],
+          )),
+          // Call button
+          IconButton(
+            onPressed: _callSaathi,
+            icon: Icon(Icons.call, color: AppColors.primaryGreen),
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.bgGreen,
+              shape: CircleBorder()),
+          ),
+        ]),
+        SizedBox(height: 16),
+        // OTP display (only when status == 'arriving')
+        if (_status == 'arriving')
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.bgGreen,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primaryGreen)),
+            child: Column(children: [
+              Text('સાથીને આ OTP આપો',
+                style: TextStyle(fontSize: 14,
+                  color: AppColors.primaryGreen)),
+              Text('Give this OTP to Saathi',
+                style: TextStyle(fontSize: 12,
+                  color: AppColors.textGrey)),
+              SizedBox(height: 8),
+              Text(_otp,
+                style: TextStyle(fontSize: 40,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryGreen,
+                  letterSpacing: 12)),
+            ]),
+          ),
+      ],
+    ),
+  ),
+)
+```
+
+### 7. Saathi Dashboard — incoming request popup
+
+Replace simple card with proper modal popup:
+```dart
+// When new ride request arrives, show bottom sheet
+// that cannot be dismissed by swiping (isDismissible: false)
+
+showModalBottomSheet(
+  context: context,
+  isDismissible: false,
+  enableDrag: false,
+  backgroundColor: Colors.transparent,
+  builder: (_) => WillPopScope(
+    onWillPop: () async => false,
+    child: Container(
+      padding: EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(28)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min,
+        children: [
+          // Timer countdown bar
+          LinearProgressIndicator(
+            value: _timerValue, // 1.0 → 0.0 in 30 seconds
+            backgroundColor: Colors.grey.shade200,
+            valueColor: AlwaysStoppedAnimation(
+              _timerValue > 0.5 ? AppColors.primaryGreen
+              : _timerValue > 0.25 ? Colors.orange
+              : Colors.red),
+          ),
+          SizedBox(height: 8),
+          Text('${_seconds} સેકન્ડ / seconds',
+            style: TextStyle(fontSize: 12,
+              color: AppColors.textGrey)),
+          SizedBox(height: 16),
+          Text('🛵 નવી સવારી વિનંતી!',
+            style: TextStyle(fontSize: 20,
+              fontWeight: FontWeight.bold)),
+          Text('New Ride Request',
+            style: TextStyle(color: AppColors.textGrey)),
+          SizedBox(height: 20),
+          // Route card
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.bgGreen,
+              borderRadius: BorderRadius.circular(12)),
+            child: Column(children: [
+              Row(children: [
+                Icon(Icons.circle, color: AppColors.primaryGreen,
+                  size: 12),
+                SizedBox(width: 8),
+                Text(pickupVillage,
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              ]),
+              Container(margin: EdgeInsets.only(left: 5),
+                height: 20, width: 2,
+                color: Colors.grey.shade300),
+              Row(children: [
+                Icon(Icons.location_on,
+                  color: AppColors.primaryOrange, size: 14),
+                SizedBox(width: 8),
+                Text(destinationVillage,
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              ]),
+            ]),
+          ),
+          SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Text('📍 ${distance} km',
+                style: TextStyle(fontSize: 14)),
+              Container(width: 1, height: 20,
+                color: Colors.grey.shade300),
+              Text('💰 ₹${fare}',
+                style: TextStyle(fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryGreen)),
+              Container(width: 1, height: 20,
+                color: Colors.grey.shade300),
+              Text('👤 ${customerName}',
+                style: TextStyle(fontSize: 14)),
+            ],
+          ),
+          SizedBox(height: 20),
+          Row(children: [
+            // Reject
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _reject,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: BorderSide(color: Colors.red),
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('નામંજૂર / Reject',
+                  style: TextStyle(fontSize: 15)),
+              ),
+            ),
+            SizedBox(width: 12),
+            // Accept
+            Expanded(
+              flex: 2,
+              child: ElevatedButton(
+                onPressed: _accept,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryGreen,
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('સ્વીકારો / Accept',
+                  style: TextStyle(fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+              ),
+            ),
+          ]),
+          SizedBox(height: 8),
+        ],
+      ),
+    ),
+  ),
+);
+```
+
+### 8. Rating Screen — proper star UI
+
+```dart
+class RatingScreen extends StatefulWidget {
+  final RideModel ride;
+}
+
+// Show after ride completes
+// Cannot skip — must rate before going home
+
+Scaffold(
+  body: Padding(24,
+    Column(center,
+      SizedBox(height: 60),
+      Icon(Icons.check_circle, color: success, size: 80),
+      Text('સવારી પૂર્ણ! / Ride Complete!', bold 24px),
+      SizedBox(height: 8),
+      Text('Fare paid: ₹${ride.fare}', 16px green),
+      SizedBox(height: 40),
+
+      // Saathi avatar + name
+      CircleAvatar(radius: 36, child: Text(ride.saathiName[0])),
+      SizedBox(height: 8),
+      Text(ride.saathiName, bold 18px),
+      Text(ride.vehicleType, grey 14px),
+      SizedBox(height: 24),
+
+      Text('Saathi ને રેટ કરો / Rate your Saathi', 16px),
+      SizedBox(height: 16),
+
+      // 5 star selector
+      Row(mainAxisAlignment: center,
+        children: List.generate(5, (i) => GestureDetector(
+          onTap: () => setState(() => _rating = i + 1),
+          child: Icon(
+            i < _rating ? Icons.star : Icons.star_outline,
+            color: Colors.amber,
+            size: 44,
+          ),
+        )),
+      ),
+      SizedBox(height: 8),
+      Text(_ratingLabel, 14px orange),
+      // Labels: 1=ખૂબ ખરાબ, 2=ખરાબ, 3=ઠીક, 4=સારો, 5=ઉત્કૃષ્ટ
+
+      SizedBox(height: 24),
+
+      // Quick feedback chips
+      Wrap(spacing: 8, children: [
+        _chip('સમયસર / On time'),
+        _chip('સ્વચ્છ વાહન / Clean vehicle'),
+        _chip('સારો સ્વભાવ / Friendly'),
+        _chip('સુરક્ษિત ડ્રાઇવિંગ / Safe driving'),
+      ]),
+
+      Spacer(),
+
+      ElevatedButton(
+        text: _rating == 0 ? 'skip' : 'Submit Rating',
+        // if rating == 0, skip without saving
+        // else save rating to Firestore and update saathi
+        onPressed: _submit,
+      ),
+    ),
+  ),
+)
+```
+
+### 9. GaamHaul Home — vehicle type card improvement
+
+```dart
+// Vehicle type selection cards — 2x2 grid
+GridView.count(
+  crossAxisCount: 2,
+  shrinkWrap: true,
+  childAspectRatio: 1.4,
+  children: [
+    _vehicleCard('mini_tempo', '🚛', 'મિની ટેમ્પો', 'Mini Tempo',
+      'up to 500kg'),
+    _vehicleCard('pickup', '🚐', 'પિકઅપ ટ્રક', 'Pickup Truck',
+      'up to 1000kg'),
+    _vehicleCard('tractor', '🚜', 'ટ્રેક્ટર', 'Tractor',
+      'farm use'),
+    _vehicleCard('truck_407', '🚚', '407 ટ્રક', '407 Truck',
+      'up to 3000kg'),
+  ],
+)
+
+Widget _vehicleCard(String type, String emoji, String nameGu,
+    String nameEn, String capacity) {
+  final selected = _selectedType == type;
+  return GestureDetector(
+    onTap: () => setState(() => _selectedType = type),
+    child: AnimatedContainer(
+      duration: Duration(milliseconds: 200),
+      margin: EdgeInsets.all(6),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: selected ? AppColors.bgOrange : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: selected ? AppColors.primaryOrange
+              : Colors.grey.shade200,
+          width: selected ? 2 : 1,
+        ),
+        boxShadow: selected ? [BoxShadow(
+          color: AppColors.primaryOrange.withOpacity(0.2),
+          blurRadius: 8)] : [],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(emoji, style: TextStyle(fontSize: 28)),
+          SizedBox(height: 4),
+          Text(nameGu, style: TextStyle(
+            fontSize: 13, fontWeight: FontWeight.bold,
+            color: selected ? AppColors.primaryOrange
+                : AppColors.textDark)),
+          Text(capacity, style: TextStyle(
+            fontSize: 10, color: AppColors.textGrey)),
+        ],
+      ),
+    ),
+  );
+}
+```
+
+### 10. Profile Setup Screen — add photo option
+
+```dart
+// Profile photo picker
+GestureDetector(
+  onTap: _pickPhoto,
+  child: Stack(children: [
+    CircleAvatar(
+      radius: 50,
+      backgroundColor: AppColors.bgGreen,
+      backgroundImage: _photo != null
+          ? FileImage(_photo!) : null,
+      child: _photo == null
+          ? Icon(Icons.person, size: 50,
+              color: AppColors.primaryGreen)
+          : null,
+    ),
+    Positioned(
+      bottom: 0, right: 0,
+      child: Container(
+        padding: EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: AppColors.primaryGreen,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(Icons.camera_alt,
+          color: Colors.white, size: 16),
+      ),
+    ),
+  ]),
+)
+```
+
+### 11. Add empty states everywhere
+
+```dart
+// When no Saathi found
+Widget _emptyState() {
+  return Center(
+    child: Padding(
+      padding: EdgeInsets.all(40),
+      child: Column(children: [
+        Icon(Icons.directions_bike_outlined,
+          size: 64, color: Colors.grey.shade300),
+        SizedBox(height: 16),
+        Text('કોઈ સાથી ઉપલબ્ધ નથી',
+          style: TextStyle(fontSize: 18,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textGrey)),
+        Text('No Saathi available right now',
+          style: TextStyle(color: AppColors.textLight)),
+        SizedBox(height: 16),
+        Text('થોડીવાર રાહ જુઓ અને ફરી પ્રયાસ કરો',
+          style: TextStyle(fontSize: 13,
+            color: AppColors.textLight),
+          textAlign: TextAlign.center),
+        SizedBox(height: 24),
+        OutlinedButton.icon(
+          icon: Icon(Icons.refresh),
+          label: Text('ફરી શોધો / Search Again'),
+          onPressed: _searchSaathi,
+        ),
+      ]),
+    ),
+  );
+}
+```
+
+### 12. Add network connectivity check
+
+```dart
+// lib/utils/connectivity_checker.dart
+// Check internet on every screen load
+// If no internet show banner:
+
+Container(
+  width: double.infinity,
+  color: Colors.red.shade700,
+  padding: EdgeInsets.symmetric(vertical: 6),
+  child: Row(mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Icon(Icons.wifi_off, color: Colors.white, size: 16),
+      SizedBox(width: 8),
+      Text('ઇન્ટરનેટ નથી / No internet connection',
+        style: TextStyle(color: Colors.white, fontSize: 13)),
+    ]),
+)
+```
+
+### 13. Fix all loading states
+
+Every async operation must show loading:
+```dart
+// Replace all bare FutureBuilder with this pattern:
+if (snapshot.connectionState == ConnectionState.waiting) {
+  return Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        CircularProgressIndicator(color: AppColors.primaryGreen),
+        SizedBox(height: 16),
+        Text('લોડ થઈ રહ્યું છે... / Loading...',
+          style: TextStyle(color: AppColors.textGrey)),
+      ],
+    ),
+  );
+}
+
+if (snapshot.hasError) {
+  return Center(
+    child: Column(children: [
+      Icon(Icons.error_outline, size: 48, color: Colors.red),
+      Text('કંઈક ખોટું થયું / Something went wrong'),
+      TextButton(
+        onPressed: () => setState((){}),
+        child: Text('ફરી પ્રયાસ / Retry')),
+    ]),
+  );
+}
+```
+
+### 14. Earnings Screen — proper charts
+
+```dart
+// saathi_earnings_screen.dart
+// Show bar chart of last 7 days earnings
+// Use simple custom painter (no external chart library needed)
+
+class EarningsBarChart extends CustomPainter {
+  final List<double> values; // 7 days earnings
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Draw 7 bars, green color
+    // Max bar height = size.height * 0.8
+    // Each bar width = size.width / 9 (with gaps)
+    // Label below each bar: Mon, Tue, Wed...
+    // Amount above each bar: ₹X
+  }
+}
+```
+
+===================================================
+PART 2 — GAAMOPS ADMIN PANEL FINAL POLISH
+===================================================
+
+### 1. Dashboard improvements
+
+A. Stats cards — add trend indicator:
+```jsx
+// Each stat card shows:
+<div className="stat-card">
+  <div className="stat-icon">{icon}</div>
+  <div className="stat-value">{value}</div>
+  <div className="stat-label">{label}</div>
+  <div className={`stat-trend ${trend > 0 ? 'up' : 'down'}`}>
+    {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}% vs yesterday
+  </div>
+</div>
+```
+
+B. Live activity feed — real-time with onSnapshot:
+```jsx
+// Listen to rides + haul_bookings ordered by createdAt
+// Show last 10 events with:
+// - Color coded dot (green=ride, orange=haul)
+// - Event description in English
+// - Relative time (2 min ago, 5 min ago)
+// Auto-scroll to top when new event arrives
+useEffect(() => {
+  const unsubRides = onSnapshot(
+    query(collection(db, 'rides'),
+      orderBy('createdAt', 'desc'), limit(5)),
+    (snap) => setRideEvents(snap.docs)
+  );
+  const unsubHaul = onSnapshot(
+    query(collection(db, 'haul_bookings'),
+      orderBy('createdAt', 'desc'), limit(5)),
+    (snap) => setHaulEvents(snap.docs)
+  );
+  return () => { unsubRides(); unsubHaul(); };
+}, []);
+```
+
+### 2. Live Rides Map — fix Saathi markers
+
+```jsx
+// Google Maps with live updating saathi positions
+// Listen to saathis where isOnline==true
+// Update markers every 5 seconds
+
+const [saathiMarkers, setSaathiMarkers] = useState([]);
+
+useEffect(() => {
+  const unsub = onSnapshot(
+    query(collection(db, 'saathis'),
+      where('isOnline', '==', true)),
+    (snap) => {
+      setSaathiMarkers(snap.docs.map(doc => ({
+        id: doc.id,
+        lat: doc.data().position?.geopoint?.latitude || 0,
+        lng: doc.data().position?.geopoint?.longitude || 0,
+        name: doc.data().name,
+        vehicle: doc.data().vehicleType,
+      })));
+    }
+  );
+  return unsub;
+}, []);
+
+// Render on Google Map as green bike markers
+// Click marker → show popup with saathi details
+```
+
+### 3. Revenue Page — fix calculations
+
+```jsx
+// Read from CORRECT collections:
+// rides (not bookings) for GaamRide revenue
+// haul_bookings for GaamHaul commission
+
+const calculateRevenue = async (dateRange) => {
+  // GaamRide: sum of fare from completed rides
+  const ridesSnap = await getDocs(query(
+    collection(db, 'rides'),
+    where('status', '==', 'completed'),
+    where('createdAt', '>=', dateRange.start),
+    where('createdAt', '<=', dateRange.end)
+  ));
+  const rideRevenue = ridesSnap.docs.reduce(
+    (sum, doc) => sum + (doc.data().fare || 0), 0);
+
+  // GaamHaul: 75 × completed bookings
+  const haulSnap = await getDocs(query(
+    collection(db, 'haul_bookings'),
+    where('status', '==', 'completed'),
+    where('createdAt', '>=', dateRange.start),
+    where('createdAt', '<=', dateRange.end)
+  ));
+  const haulRevenue = haulSnap.docs.length * 75;
+
+  return { rideRevenue, haulRevenue,
+    total: rideRevenue + haulRevenue };
+};
+```
+
+### 4. App Settings Page — live fare update
+
+```jsx
+// Settings form that reads/writes app_settings/config
+// When admin changes fare and saves:
+// Flutter app reads new values on next session
+// No app update needed
+
+const [settings, setSettings] = useState({
+  rideFareBase: 20,
+  rideFarePerKm: 8,
+  rideFareMinimum: 25,
+  rideFareMaximum: 200,
+  haulCommission: 75,
+  maintenanceMode: false,
+});
+
+const saveSettings = async () => {
+  await setDoc(
+    doc(db, 'app_settings', 'config'),
+    { ...settings, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+  toast.success('Settings saved! App will update automatically.');
+};
+
+// Maintenance mode toggle with confirmation:
+const toggleMaintenance = async () => {
+  const confirm = window.confirm(
+    settings.maintenanceMode
+      ? 'Turn OFF maintenance? App will go live.'
+      : 'Turn ON maintenance? App will be blocked for users!'
+  );
+  if (!confirm) return;
+  await updateDoc(doc(db, 'app_settings', 'config'), {
+    maintenanceMode: !settings.maintenanceMode
+  });
+};
+```
+
+### 5. Saathi Manager — add map view tab
+
+```jsx
+// Two views: Table | Map
+// Map view shows all saathis as pins
+// Green = online, Grey = offline
+// Click pin → saathi detail sidebar
+
+const SaathiManager = () => {
+  const [view, setView] = useState('table'); // 'table' | 'map'
+
+  return (
+    <div>
+      <div className="view-toggle">
+        <button onClick={() => setView('table')}
+          className={view === 'table' ? 'active' : ''}>
+          📋 Table
+        </button>
+        <button onClick={() => setView('map')}
+          className={view === 'map' ? 'active' : ''}>
+          🗺️ Map
+        </button>
+      </div>
+      {view === 'table' ? <SaathiTable /> : <SaathiMap />}
+    </div>
+  );
+};
+```
+
+### 6. Add toast notifications throughout
+
+```jsx
+// Install: react-hot-toast (already in most setups)
+import toast from 'react-hot-toast';
+
+// Use instead of alert():
+toast.success('Saathi blocked successfully');
+toast.error('Failed to load data');
+toast.loading('Sending notification...');
+
+// Add Toaster to App.jsx root:
+<Toaster position="top-right" />
+```
+
+### 7. Add loading skeletons
+
+```jsx
+// Replace loading spinners with skeleton screens
+const SkeletonCard = () => (
+  <div className="skeleton-card animate-pulse">
+    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+    <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+    <div className="h-8 bg-gray-200 rounded w-full"></div>
+  </div>
+);
+
+// Show 3-5 skeleton cards while data loads
+// Replace with real data when loaded
+```
+
+### 8. Village Manager — add coordinate validation
+
+```jsx
+// When admin edits village coordinates:
+const validateCoords = (lat, lng) => {
+  // Must be within service zone bounds
+  const minLat = 20.78, maxLat = 20.92;
+  const minLng = 73.19, maxLng = 73.32;
+  return lat >= minLat && lat <= maxLat
+      && lng >= minLng && lng <= maxLng;
+};
+
+// If outside bounds show warning:
+// "⚠️ These coordinates are outside the GaamRide service zone"
+```
+
+### 9. Broadcast notification UI
+
+```jsx
+// Settings page → Notifications section
+const BroadcastNotification = () => {
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [target, setTarget] = useState('all');
+
+  const send = async () => {
+    // Get FCM tokens from users collection
+    // filtered by role if target != 'all'
+    const q = target === 'all'
+      ? query(collection(db, 'users'))
+      : query(collection(db, 'users'),
+          where('role', '==', target));
+
+    const snap = await getDocs(q);
+    const tokens = snap.docs
+      .map(d => d.data().fcmToken)
+      .filter(t => t && t !== '');
+
+    // Send via your backend/Cloud Function
+    // For now: show how many users will receive
+    const confirmed = window.confirm(
+      `Send to ${tokens.length} users?`);
+    if (confirmed) {
+      // Call your notification endpoint
+      toast.success(`Notification sent to ${tokens.length} users!`);
+    }
+  };
+
+  return (
+    <div className="notification-form">
+      <select value={target} onChange={e => setTarget(e.target.value)}>
+        <option value="all">All Users</option>
+        <option value="customer">Customers Only</option>
+        <option value="saathi">Saathis Only</option>
+      </select>
+      <input placeholder="Title" value={title}
+        onChange={e => setTitle(e.target.value)} />
+      <textarea placeholder="Message body" value={body}
+        onChange={e => setBody(e.target.value)} />
+      <button onClick={send} disabled={!title || !body}>
+        📢 Send Notification
+      </button>
+    </div>
+  );
+};
+```
+
+### 10. Export CSV function
+
+```jsx
+// Add to Ride History + Revenue pages
+const exportCSV = (data, filename) => {
+  const headers = Object.keys(data[0]);
+  const rows = data.map(row =>
+    headers.map(h => `"${row[h] || ''}"`).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+};
+
+// Add export button to history pages:
+<button onClick={() => exportCSV(ridesData, 'gaamride_rides')}>
+  📥 Export CSV
+</button>
+```
+
+===================================================
+FIRESTORE INDEXES TO CREATE
+===================================================
+
+Go to Firebase Console → Firestore → Indexes → Composite
+Create ALL of these (required for queries to work):
+
+1. Collection: rides
+   Fields: saathiId ASC, createdAt DESC
+
+2. Collection: rides
+   Fields: customerId ASC, createdAt DESC
+
+3. Collection: rides
+   Fields: status ASC, createdAt DESC
+
+4. Collection: rides
+   Fields: saathiId ASC, status ASC, completedAt DESC
+
+5. Collection: haul_bookings
+   Fields: customerId ASC, createdAt DESC
+
+6. Collection: haul_bookings
+   Fields: vehicleOwnerId ASC, createdAt DESC
+
+7. Collection: haul_bookings
+   Fields: status ASC, createdAt DESC
+
+8. Collection: saathis
+   Fields: isOnline ASC, lastSeen DESC
+
+===================================================
+FINAL CHECKLIST — verify before launch
+===================================================
+
+Flutter app:
+[ ] OTP login works (real phone, not just emulator)
+[ ] Saathi goes online → position updates in Firestore
+[ ] Customer searches → sees nearby Saathi on map
+[ ] Ride request created → Saathi gets popup
+[ ] Saathi accepts → customer sees tracking map
+[ ] Saathi marker moves on customer screen
+[ ] OTP shows when Saathi arrives
+[ ] Ride completes → rating screen appears
+[ ] GaamHaul search works
+[ ] All text is bilingual (Gujarati + English)
+[ ] No hardcoded coordinates (reads from Firestore)
+[ ] Maintenance mode blocks app when true
+[ ] SOS button works (dials 112)
+[ ] Back button never goes to login after login
+
+GaamOps admin:
+[ ] Google login works (admin email only)
+[ ] Dashboard shows real-time data
+[ ] Live map shows online Saathis moving
+[ ] Can block/unblock users and saathis
+[ ] Revenue shows correct calculations
+[ ] Settings saves to Firestore and Flutter reads it
+[ ] Maintenance mode toggle works immediately
+[ ] Village coordinates validated on edit
+[ ] Export CSV works
+
+===================================================
+GENERATE COMPLETE UPDATED CODE FOR:
+===================================================
+
+Flutter (/mobile):
+- All screen files with complete UI as described above
+- All widget files with new designs
+- connectivity_checker.dart (new)
+- Update all loading states
+
+React (/admin or root):
+- Dashboard.jsx (real-time feed + trend cards)
+- LiveRides.jsx (map with moving markers)
+- Revenue.jsx (fixed calculations)
+- SaathiManager.jsx (table + map view)
+- AppSettings.jsx (fare settings + maintenance + notifications)
+- VillageManager.jsx (coordinate validation)
+- All pages with skeleton loading + toast notifications
+
+No placeholder code. Complete working files only.

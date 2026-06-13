@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,7 +12,6 @@ import '../../services/saathi_service.dart';
 import '../../services/settings_service.dart';
 import '../../utils/fare_calculator.dart';
 import '../../widgets/village_selector_sheet.dart';
-import '../../widgets/saathi_card.dart';
 import '../../widgets/loading_overlay.dart';
 import 'ride_request_screen.dart';
 
@@ -22,19 +22,30 @@ class CustomerHomeScreen extends StatefulWidget {
   State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
 }
 
-class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+class _CustomerHomeScreenState extends State<CustomerHomeScreen>
+    with SingleTickerProviderStateMixin {
   List<VillageModel> _villages = [];
   VillageModel? _pickupVillage;
   VillageModel? _destinationVillage;
   List<SaathiModel> _availableSaathis = [];
   Position? _myPosition;
   bool _loading = false;
+  bool _searching = false;
   String _userName = '';
   Map<String, dynamic> _settings = {};
+  late AnimationController _pulseController;
+  late Animation<double> _pulse;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _pulse = Tween<double>(begin: 1.0, end: 1.03).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
     _init();
   }
 
@@ -59,8 +70,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
 
     if (_myPosition != null && villages.isNotEmpty) {
-      final nearest = VillageService.nearest(_myPosition!.latitude, _myPosition!.longitude, villages);
-      setState(() => _pickupVillage = nearest);
+      final nearest = VillageService.nearest(
+          _myPosition!.latitude, _myPosition!.longitude, villages);
+      if (mounted) setState(() => _pickupVillage = nearest);
     }
   }
 
@@ -80,21 +92,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Future<void> _searchSaathis() async {
     if (_pickupVillage == null || _destinationVillage == null) return;
-    setState(() => _loading = true);
+    setState(() { _searching = true; _loading = true; });
     final docs = await SaathiService.getAvailableSaathis();
     final saathis = docs.map((d) => SaathiModel.fromFirestore(d)).toList();
-
     if (mounted) {
       setState(() {
         _availableSaathis = saathis;
         _loading = false;
+        _searching = false;
       });
     }
   }
 
   double _distanceTo(SaathiModel saathi) {
-    if (_pickupVillage == null) return 0;
-    if (saathi.position == null) return 0;
+    if (_pickupVillage == null || saathi.position == null) return 0;
     final geoPoint = saathi.position!['geopoint'];
     if (geoPoint == null) return 0;
     return Geolocator.distanceBetween(
@@ -105,8 +116,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   double _estimatedFare() {
     if (_pickupVillage == null || _destinationVillage == null) return 0;
-    final dist = VillageService.distanceBetween(_pickupVillage!, _destinationVillage!);
+    final dist =
+        VillageService.distanceBetween(_pickupVillage!, _destinationVillage!);
     return FareCalculator.calculate(distanceMeters: dist, settings: _settings);
+  }
+
+  double _distanceKm() {
+    if (_pickupVillage == null || _destinationVillage == null) return 0;
+    return VillageService.distanceBetween(_pickupVillage!, _destinationVillage!) /
+        1000;
   }
 
   void _bookSaathi(SaathiModel saathi) {
@@ -122,6 +140,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   @override
@@ -156,119 +180,44 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
-                ),
-                child: Column(
-                  children: [
-                    _VillagePickerRow(
-                      label: '📍 Pickup',
-                      village: _pickupVillage,
-                      color: AppColors.primaryGreen,
-                      onTap: () async {
-                        final v = await VillageSelectorSheet.show(
-                          context,
-                          villages: _villages,
-                          excludeVillageId: _destinationVillage?.id,
-                        );
-                        if (v != null) setState(() => _pickupVillage = v);
-                      },
-                    ),
-                    const Divider(height: 1),
-                    const SizedBox(height: 4),
-                    _VillagePickerRow(
-                      label: '🏁 Destination',
-                      village: _destinationVillage,
-                      color: AppColors.primaryOrange,
-                      onTap: () async {
-                        final v = await VillageSelectorSheet.show(
-                          context,
-                          villages: _villages,
-                          excludeVillageId: _pickupVillage?.id,
-                        );
-                        if (v != null) setState(() => _destinationVillage = v);
-                      },
-                    ),
-                    if (_pickupVillage != null && _destinationVillage != null) ...[
-                      const Divider(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            AppStrings.estimatedFare,
-                            style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
-                          ),
-                          Text(
-                            '₹${_estimatedFare().toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: AppColors.primaryGreen,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              _buildLocationCard(),
+              const SizedBox(height: 12),
+              _buildDestinationCard(),
+              if (_pickupVillage != null && _destinationVillage != null) ...[
+                const SizedBox(height: 12),
+                _buildFareCard(),
+              ],
               const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryGreen,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: const Icon(Icons.search, color: Colors.white),
-                  label: const Text(
-                    AppStrings.findSaathi,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
-                  onPressed: _searchSaathis,
-                ),
-              ),
+              _buildFindButton(),
               if (_availableSaathis.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Text(
-                  '${_availableSaathis.length} Saathi Available',
+                  '${_availableSaathis.length} સાથી ઉપલબ્ધ',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                       color: AppColors.textDark),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_availableSaathis.length} Saathi Available',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textGrey),
+                ),
                 const SizedBox(height: 10),
-                ...sortedSaathis.map(
-                  (s) => SaathiCard(
-                    saathi: s,
-                    distanceMeters: _distanceTo(s),
-                    isPreferred: s == sortedSaathis.first,
-                    onBook: () => _bookSaathi(s),
+                ...sortedSaathis.asMap().entries.map(
+                  (e) => _SaathiCard(
+                    saathi: e.value,
+                    distanceMeters: _distanceTo(e.value),
+                    isPreferred: e.key == 0,
+                    onBook: () => _bookSaathi(e.value),
                   ),
                 ),
-              ] else if (!_loading && _availableSaathis.isEmpty && _pickupVillage != null) ...[
+              ] else if (!_loading &&
+                  _availableSaathis.isEmpty &&
+                  _pickupVillage != null) ...[
                 const SizedBox(height: 30),
-                const Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.search_off, size: 60, color: AppColors.textLight),
-                      SizedBox(height: 12),
-                      Text('No Saathi available right now',
-                          style: TextStyle(color: AppColors.textGrey)),
-                      Text('Try again in a few minutes',
-                          style: TextStyle(fontSize: 12, color: AppColors.textLight)),
-                    ],
-                  ),
-                ),
+                _buildEmptyState(),
               ],
             ],
           ),
@@ -276,44 +225,446 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ),
     );
   }
+
+  Widget _buildLocationCard() {
+    return GestureDetector(
+      onTap: () async {
+        final v = await VillageSelectorSheet.show(
+          context,
+          villages: _villages,
+          excludeVillageId: _destinationVillage?.id,
+        );
+        if (v != null) setState(() => _pickupVillage = v);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.05), blurRadius: 8)
+          ],
+        ),
+        child: Row(
+          children: [
+            _PulsingDot(color: AppColors.primaryGreen),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'તમારું સ્થાન / Your Location',
+                    style: TextStyle(fontSize: 11, color: AppColors.textGrey),
+                  ),
+                  Text(
+                    _pickupVillage != null
+                        ? '${_pickupVillage!.nameGu} · ${_pickupVillage!.name}'
+                        : 'સ્થાન શોધી રહ્યા છે...',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: _pickupVillage != null
+                          ? AppColors.primaryGreen
+                          : AppColors.textLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: () async {
+                await _loadLocation();
+                if (_myPosition != null && _villages.isNotEmpty) {
+                  final nearest = VillageService.nearest(
+                      _myPosition!.latitude, _myPosition!.longitude, _villages);
+                  if (mounted) setState(() => _pickupVillage = nearest);
+                }
+              },
+              icon: const Icon(Icons.refresh,
+                  color: AppColors.primaryGreen, size: 20),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDestinationCard() {
+    return GestureDetector(
+      onTap: () async {
+        final v = await VillageSelectorSheet.show(
+          context,
+          villages: _villages,
+          excludeVillageId: _pickupVillage?.id,
+          currentVillageName: _pickupVillage?.name,
+        );
+        if (v != null) setState(() => _destinationVillage = v);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: const Border(
+            left: BorderSide(color: AppColors.primaryOrange, width: 3),
+          ),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.05), blurRadius: 8)
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.flag, color: AppColors.primaryOrange, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'ક્યાં જવું છે? / Where to go?',
+                    style: TextStyle(fontSize: 11, color: AppColors.textGrey),
+                  ),
+                  Text(
+                    _destinationVillage != null
+                        ? '${_destinationVillage!.nameGu} · ${_destinationVillage!.name}'
+                        : 'ગામ પસંદ કરો...',
+                    style: TextStyle(
+                      fontWeight: _destinationVillage != null
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      fontSize: 16,
+                      color: _destinationVillage != null
+                          ? AppColors.textDark
+                          : AppColors.textLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios,
+                color: AppColors.textLight, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFareCard() {
+    final fare = _estimatedFare();
+    final km = _distanceKm();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primaryGreen, Color(0xFF2E7D32)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Text('₹',
+              style: TextStyle(
+                  color: Colors.white70, fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('અંદાજિત ભાડું / Estimated Fare',
+                    style: TextStyle(color: Colors.white70, fontSize: 11)),
+                Text(
+                  '₹${fare.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          Container(width: 1, height: 36, color: Colors.white30),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('અંતર / Distance',
+                  style: TextStyle(color: Colors.white70, fontSize: 11)),
+              Text(
+                '${km.toStringAsFixed(1)} km',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFindButton() {
+    return ScaleTransition(
+      scale: _searching ? _pulse : const AlwaysStoppedAnimation(1.0),
+      child: SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primaryGreen,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
+            elevation: 2,
+          ),
+          icon: const Icon(Icons.search, color: Colors.white),
+          label: Text(
+            _searching ? 'શોધી રહ્યા છીએ... / Searching...' : AppStrings.findSaathi,
+            style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Colors.white),
+          ),
+          onPressed: (_pickupVillage != null && _destinationVillage != null)
+              ? _searchSaathis
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          children: [
+            Icon(Icons.directions_bike_outlined,
+                size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text(
+              'કોઈ સાથી ઉપલબ્ધ નથી',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textGrey),
+            ),
+            const Text(
+              'No Saathi available right now',
+              style: TextStyle(color: AppColors.textLight),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'થોડીવાર રાહ જુઓ અને ફરી પ્રયાસ કરો',
+              style: TextStyle(fontSize: 13, color: AppColors.textLight),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text('ફરી શોધો / Search Again'),
+              onPressed: _searchSaathis,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryGreen,
+                side: const BorderSide(color: AppColors.primaryGreen),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _VillagePickerRow extends StatelessWidget {
-  final String label;
-  final VillageModel? village;
+class _PulsingDot extends StatefulWidget {
   final Color color;
-  final VoidCallback onTap;
+  const _PulsingDot({required this.color});
 
-  const _VillagePickerRow({
-    required this.label,
-    required this.village,
-    required this.color,
-    required this.onTap,
-  });
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 800))
+      ..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.6, end: 1.0).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: widget.color,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class _SaathiCard extends StatelessWidget {
+  final SaathiModel saathi;
+  final double distanceMeters;
+  final bool isPreferred;
+  final VoidCallback onBook;
+
+  const _SaathiCard({
+    required this.saathi,
+    required this.distanceMeters,
+    required this.isPreferred,
+    required this.onBook,
+  });
+
+  String get _distanceText {
+    if (distanceMeters < 1000) return '${distanceMeters.toStringAsFixed(0)} m';
+    return '${(distanceMeters / 1000).toStringAsFixed(1)} km';
+  }
+
+  int get _etaMinutes => (distanceMeters / 1000 / 25 * 60).round().clamp(1, 60);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 2)),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textGrey)),
-            const SizedBox(width: 12),
-            Expanded(
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: AppColors.bgGreen,
               child: Text(
-                village != null
-                    ? '${village!.nameGu} · ${village!.name}'
-                    : 'Select village...',
-                style: TextStyle(
-                  fontWeight: village != null ? FontWeight.bold : FontWeight.normal,
-                  color: village != null ? AppColors.textDark : AppColors.textLight,
-                  fontSize: 14,
-                ),
+                saathi.name.isNotEmpty ? saathi.name[0].toUpperCase() : '?',
+                style: const TextStyle(
+                    color: AppColors.primaryGreen,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18),
               ),
             ),
-            Icon(Icons.arrow_drop_down, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(saathi.name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15)),
+                      if (isPreferred) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B5E20),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            '⭐ PREFERRED',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(Icons.electric_rickshaw,
+                          size: 14, color: AppColors.textGrey),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${saathi.vehicleType} · $_distanceText · ~$_etaMinutes min',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textGrey),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, size: 13, color: Colors.amber),
+                      const SizedBox(width: 3),
+                      Text(
+                        saathi.rating.toStringAsFixed(1),
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textGrey),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              children: [
+                ElevatedButton(
+                  onPressed: onBook,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryGreen,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Book',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 6),
+                OutlinedButton(
+                  onPressed: () {},
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    side: const BorderSide(color: AppColors.primaryGreen),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Icon(Icons.call,
+                      color: AppColors.primaryGreen, size: 16),
+                ),
+              ],
+            ),
           ],
         ),
       ),

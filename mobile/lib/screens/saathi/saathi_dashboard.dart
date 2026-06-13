@@ -8,8 +8,6 @@ import '../../models/saathi_model.dart';
 import '../../models/ride_model.dart';
 import '../../services/saathi_service.dart';
 import '../../services/ride_service.dart';
-import '../../services/auth_service.dart';
-import '../../widgets/ride_request_popup.dart';
 import '../../widgets/earnings_card.dart';
 import '../../widgets/sos_button.dart';
 import 'saathi_ride_screen.dart';
@@ -25,7 +23,6 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
   bool _isOnline = false;
   bool _toggling = false;
   SaathiModel? _saathi;
-  RideModel? _incomingRide;
   RideModel? _activeRide;
   double _todayEarnings = 0;
   int _todayRides = 0;
@@ -33,6 +30,7 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
   StreamSubscription? _rideSub;
   StreamSubscription? _locationSub;
   StreamSubscription? _saathiSub;
+  bool _popupShown = false;
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
@@ -64,10 +62,34 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
     _rideSub = RideService.watchIncomingRides().listen((snap) {
       if (!mounted) return;
       final rides = snap.docs.map((d) => RideModel.fromFirestore(d)).toList();
-      if (rides.isNotEmpty && _isOnline && _activeRide == null) {
-        setState(() => _incomingRide = rides.first);
+      if (rides.isNotEmpty && _isOnline && _activeRide == null && !_popupShown) {
+        _showRideRequestPopup(rides.first);
       }
     });
+  }
+
+  void _showRideRequestPopup(RideModel ride) {
+    if (!mounted || _popupShown) return;
+    _popupShown = true;
+
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RideRequestModal(
+        ride: ride,
+        onAccept: () {
+          Navigator.pop(context);
+          _popupShown = false;
+          _acceptRide(ride);
+        },
+        onReject: () {
+          Navigator.pop(context);
+          _popupShown = false;
+        },
+      ),
+    ).then((_) => _popupShown = false);
   }
 
   Future<void> _toggleOnline() async {
@@ -77,7 +99,9 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
       if (_isOnline) {
         await SaathiService.goOffline(_uid!);
         _locationSub?.cancel();
-        setState(() { _isOnline = false; _incomingRide = null; });
+        setState(() {
+          _isOnline = false;
+        });
       } else {
         await SaathiService.goOnline(_uid!);
         setState(() => _isOnline = true);
@@ -119,7 +143,7 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
       saathiPhone: _saathi!.phone,
     );
     if (mounted) {
-      setState(() { _incomingRide = null; _activeRide = ride; });
+      setState(() => _activeRide = ride);
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -131,8 +155,6 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
       );
     }
   }
-
-  void _rejectRide() => setState(() => _incomingRide = null);
 
   @override
   void dispose() {
@@ -186,16 +208,36 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
             color: Colors.white,
             child: Row(
               children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: _isOnline ? AppColors.success : Colors.grey.shade400,
+                    shape: BoxShape.circle,
+                    boxShadow: _isOnline
+                        ? [
+                            BoxShadow(
+                              color: AppColors.success.withOpacity(0.4),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            )
+                          ]
+                        : [],
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _isOnline ? '🟢 Online' : '⭕ Offline',
+                        _isOnline ? 'Online — Ready for Rides' : 'Offline',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: _isOnline ? AppColors.success : AppColors.textGrey,
+                          fontSize: 15,
+                          color: _isOnline
+                              ? AppColors.success
+                              : AppColors.textGrey,
                         ),
                       ),
                       Text(
@@ -208,11 +250,17 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
                     ],
                   ),
                 ),
-                Switch.adaptive(
-                  value: _isOnline,
-                  onChanged: _toggling ? null : (_) => _toggleOnline(),
-                  activeColor: AppColors.primaryGreen,
-                ),
+                _toggling
+                    ? const SizedBox(
+                        width: 36,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Switch.adaptive(
+                        value: _isOnline,
+                        onChanged: (_) => _toggleOnline(),
+                        activeColor: AppColors.primaryGreen,
+                      ),
               ],
             ),
           ),
@@ -221,13 +269,7 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  if (_incomingRide != null && _isOnline)
-                    RideRequestPopup(
-                      ride: _incomingRide!,
-                      onAccept: () => _acceptRide(_incomingRide!),
-                      onReject: _rejectRide,
-                    ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Expanded(
@@ -258,7 +300,8 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Your Vehicle',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 14)),
                         const SizedBox(height: 10),
                         Row(
                           children: [
@@ -270,10 +313,12 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
                               children: [
                                 Text(_saathi?.vehicleType ?? '—',
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.bold, fontSize: 15)),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
                                 Text(_saathi?.vehicleNumber ?? '—',
                                     style: const TextStyle(
-                                        color: AppColors.textGrey, fontSize: 12)),
+                                        color: AppColors.textGrey,
+                                        fontSize: 12)),
                               ],
                             ),
                           ],
@@ -281,6 +326,37 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
                       ],
                     ),
                   ),
+                  if (!_isOnline) ...[
+                    const SizedBox(height: 20),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.bgGreen,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color: AppColors.primaryGreen.withOpacity(0.3)),
+                      ),
+                      child: const Column(
+                        children: [
+                          Icon(Icons.power_settings_new,
+                              color: AppColors.primaryGreen, size: 36),
+                          SizedBox(height: 8),
+                          Text(
+                            'ઓનલાઇન થઈ સવારી સ્વીકારો',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryGreen),
+                          ),
+                          Text(
+                            'Go online to start accepting rides',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textGrey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -291,3 +367,202 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
   }
 }
 
+class _RideRequestModal extends StatefulWidget {
+  final RideModel ride;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  const _RideRequestModal({
+    required this.ride,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  @override
+  State<_RideRequestModal> createState() => _RideRequestModalState();
+}
+
+class _RideRequestModalState extends State<_RideRequestModal> {
+  static const int _totalSeconds = 30;
+  int _seconds = _totalSeconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      if (_seconds <= 1) {
+        t.cancel();
+        widget.onReject();
+      } else {
+        setState(() => _seconds--);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  double get _timerValue => _seconds / _totalSeconds;
+
+  Color get _timerColor {
+    if (_timerValue > 0.5) return AppColors.primaryGreen;
+    if (_timerValue > 0.25) return Colors.orange;
+    return Colors.red;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ride = widget.ride;
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: _timerValue,
+                minHeight: 5,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation<Color>(_timerColor),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$_seconds સેકન્ડ / seconds',
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textGrey),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              '🛵 નવી સવારી વિનંતી!',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const Text(
+              'New Ride Request',
+              style: TextStyle(color: AppColors.textGrey),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.bgGreen,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.circle,
+                          color: AppColors.primaryGreen, size: 12),
+                      const SizedBox(width: 8),
+                      Text(
+                        ride.pickupVillage,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(left: 5),
+                    height: 18,
+                    width: 2,
+                    color: Colors.grey.shade300,
+                  ),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on,
+                          color: AppColors.primaryOrange, size: 14),
+                      const SizedBox(width: 8),
+                      Text(
+                        ride.destinationVillage,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Text(
+                  '📍 ${((ride.distanceMeters ?? 0) / 1000).toStringAsFixed(1)} km',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                Container(
+                    width: 1, height: 20, color: Colors.grey.shade300),
+                Text(
+                  '💰 ₹${ride.fare.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryGreen),
+                ),
+                Container(
+                    width: 1, height: 20, color: Colors.grey.shade300),
+                Text(
+                  '👤 ${ride.customerName}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: widget.onReject,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: const BorderSide(color: Colors.red),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('નામંજૂર / Reject',
+                        style: TextStyle(fontSize: 14)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: widget.onAccept,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryGreen,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'સ્વીકારો / Accept',
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom),
+          ],
+        ),
+      ),
+    );
+  }
+}

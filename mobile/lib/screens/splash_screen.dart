@@ -16,16 +16,29 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+  late Animation<double> _fade;
+
   @override
   void initState() {
     super.initState();
-    _navigate();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _scale = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
+    _fade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    );
+    _controller.forward().then((_) => _navigate());
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(seconds: 2));
-
     final settings = await SettingsService.getSettings();
     if (settings.maintenanceMode && mounted) {
       Navigator.pushAndRemoveUntil(
@@ -76,6 +89,12 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.primaryGreen,
@@ -83,42 +102,69 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Icon(
-                Icons.electric_rickshaw,
-                size: 60,
-                color: AppColors.primaryGreen,
+            ScaleTransition(
+              scale: _scale,
+              child: FadeTransition(
+                opacity: _fade,
+                child: Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.electric_rickshaw,
+                    size: 64,
+                    color: AppColors.primaryGreen,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              AppStrings.appName,
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+            const SizedBox(height: 24),
+            FadeTransition(
+              opacity: _fade,
+              child: const Text(
+                AppStrings.appName,
+                style: TextStyle(
+                  fontSize: 38,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              AppStrings.taglineGu,
-              style: TextStyle(color: Colors.white70, fontSize: 16),
+            const SizedBox(height: 6),
+            FadeTransition(
+              opacity: _fade,
+              child: const Text(
+                AppStrings.taglineGu,
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+              ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              AppStrings.taglineEn,
-              style: TextStyle(color: Colors.white60, fontSize: 12),
+            FadeTransition(
+              opacity: _fade,
+              child: const Text(
+                AppStrings.taglineEn,
+                style: TextStyle(color: Colors.white60, fontSize: 12),
+              ),
             ),
-            const SizedBox(height: 50),
-            const CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 2,
+            const SizedBox(height: 60),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2,
+              ),
             ),
           ],
         ),
