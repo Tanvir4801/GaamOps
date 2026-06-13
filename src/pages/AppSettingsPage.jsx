@@ -6,8 +6,10 @@ import { useDoc } from '../hooks/useDoc.js'
 import Spinner from '../components/Spinner.jsx'
 
 const DEFAULT = {
-  rideFareBase: '', rideFarePerKm: '', rideFareMinimum: '', rideFareMaximum: '',
+  rideFareBase: 15, rideFarePerKm: 8, rideFareMinimum: 25, rideFareMaximum: 300,
   haulCommission: 75,
+  gstPercent: 5, platformFee: 3, lateNightFee: 10,
+  gaamRideUpi: 'gaamride@upi',
   serviceZoneSW: { lat: '', lng: '' }, serviceZoneNE: { lat: '', lng: '' },
   maintenanceMode: false, appVersion: '',
   surgeMorning: 1.0, surgeEvening: 1.0, surgeWeekend: 1.0,
@@ -25,11 +27,15 @@ export default function AppSettingsPage() {
   useEffect(() => {
     if (!data) return
     setForm({
-      rideFareBase: data.rideFareBase ?? '',
-      rideFarePerKm: data.rideFarePerKm ?? '',
-      rideFareMinimum: data.rideFareMinimum ?? '',
-      rideFareMaximum: data.rideFareMaximum ?? '',
+      rideFareBase: data.rideFareBase ?? 15,
+      rideFarePerKm: data.rideFarePerKm ?? 8,
+      rideFareMinimum: data.rideFareMinimum ?? 25,
+      rideFareMaximum: data.rideFareMaximum ?? 300,
       haulCommission: data.haulCommission ?? 75,
+      gstPercent: data.gstPercent ?? 5,
+      platformFee: data.platformFee ?? 3,
+      lateNightFee: data.lateNightFee ?? 10,
+      gaamRideUpi: data.gaamRideUpi ?? 'gaamride@upi',
       serviceZoneSW: data.serviceZoneSW || { lat: '', lng: '' },
       serviceZoneNE: data.serviceZoneNE || { lat: '', lng: '' },
       maintenanceMode: data.maintenanceMode ?? false,
@@ -54,6 +60,10 @@ export default function AppSettingsPage() {
         rideFareMinimum: Number(form.rideFareMinimum),
         rideFareMaximum: Number(form.rideFareMaximum),
         haulCommission: Number(form.haulCommission),
+        gstPercent: Number(form.gstPercent) || 5,
+        platformFee: Number(form.platformFee) || 3,
+        lateNightFee: Number(form.lateNightFee) || 10,
+        gaamRideUpi: form.gaamRideUpi || 'gaamride@upi',
         serviceZoneSW: { lat: Number(form.serviceZoneSW.lat), lng: Number(form.serviceZoneSW.lng) },
         serviceZoneNE: { lat: Number(form.serviceZoneNE.lat), lng: Number(form.serviceZoneNE.lng) },
         maintenanceMode: form.maintenanceMode,
@@ -143,10 +153,43 @@ export default function AppSettingsPage() {
         <div className="space-y-6">
           <Section title="Ride Fare">
             <Input label="Base fare ₹" value={form.rideFareBase} onChange={(v) => set('rideFareBase', v)} note="Charged for every ride" />
-            <Input label="Per km ₹" value={form.rideFarePerKm} onChange={(v) => set('rideFarePerKm', v)} />
+            <Input label="Per km ₹" value={form.rideFarePerKm} onChange={(v) => set('rideFarePerKm', v)} note="Rate per kilometre" />
             <Input label="Minimum fare ₹" value={form.rideFareMinimum} onChange={(v) => set('rideFareMinimum', v)} />
-            <Input label="Maximum fare ₹" value={form.rideFareMaximum} onChange={(v) => set('rideFareMaximum', v)} />
+            <Input label="Maximum fare cap ₹" value={form.rideFareMaximum} onChange={(v) => set('rideFareMaximum', v)} />
           </Section>
+
+          <hr className="border-gray-100" />
+
+          <div>
+            <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-gray-500">💸 Taxes & Fees</h3>
+            <p className="mb-3 text-xs text-gray-400">Applied to every ride on top of base + distance. Shown in the app's fare breakdown.</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Input label="GST %" value={form.gstPercent} onChange={(v) => set('gstPercent', v)} note="5% is standard for ride-share" />
+              <Input label="Platform fee ₹" value={form.platformFee} onChange={(v) => set('platformFee', v)} note="Flat fee per ride" />
+              <Input label="Late night surcharge ₹" value={form.lateNightFee} onChange={(v) => set('lateNightFee', v)} note="Applied 11 PM – 5 AM" />
+            </div>
+          </div>
+
+          <hr className="border-gray-100" />
+
+          <div>
+            <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-gray-500">📱 UPI Payment</h3>
+            <p className="mb-3 text-xs text-gray-400">Central GaamRide UPI ID shown to customers when they choose UPI payment. Free to use — no gateway fees.</p>
+            <div className="flex items-center gap-3 rounded-lg border border-purple-100 bg-purple-50 p-4">
+              <span className="text-2xl">📱</span>
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-gray-600">GaamRide UPI ID</label>
+                <input
+                  type="text"
+                  value={form.gaamRideUpi}
+                  onChange={(e) => set('gaamRideUpi', e.target.value)}
+                  placeholder="yourname@upi"
+                  className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-mono font-bold text-purple-700 outline-none focus:ring-2 focus:ring-purple-300"
+                />
+                <p className="mt-1 text-xs text-gray-400">Works with GPay, PhonePe, Paytm, BHIM — customers launch their UPI app directly</p>
+              </div>
+            </div>
+          </div>
 
           <hr className="border-gray-100" />
 

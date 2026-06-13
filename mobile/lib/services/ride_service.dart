@@ -17,6 +17,14 @@ class RideService {
     required double destinationLng,
     required double fare,
     required double distance,
+    String paymentMethod = RideModel.paymentCash,
+    double baseFare = 0,
+    double distanceCharge = 0,
+    double surgeMultiplier = 1.0,
+    double lateNightFee = 0,
+    double gstAmount = 0,
+    double platformFee = 0,
+    double promoDiscount = 0,
   }) async {
     final ref = _rides.doc();
     final otp = (1000 + Random().nextInt(9000)).toString();
@@ -42,6 +50,17 @@ class RideService {
       'saathiLng': 0.0,
       'cancelReason': '',
       'rating': 0,
+      'paymentMethod': paymentMethod,
+      'paymentStatus': paymentMethod == RideModel.paymentUpi
+          ? RideModel.paymentPaid
+          : RideModel.paymentPending,
+      'baseFare': baseFare,
+      'distanceCharge': distanceCharge,
+      'surgeMultiplier': surgeMultiplier,
+      'lateNightFee': lateNightFee,
+      'gstAmount': gstAmount,
+      'platformFee': platformFee,
+      'promoDiscount': promoDiscount,
       'createdAt': FieldValue.serverTimestamp(),
       'acceptedAt': null,
       'startedAt': null,

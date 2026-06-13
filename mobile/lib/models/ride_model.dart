@@ -24,6 +24,15 @@ class RideModel {
   final double? distanceMeters;
   final String cancelReason;
   final int rating;
+  final String paymentMethod;
+  final String paymentStatus;
+  final double baseFare;
+  final double distanceCharge;
+  final double surgeMultiplier;
+  final double lateNightFee;
+  final double gstAmount;
+  final double platformFee;
+  final double promoDiscount;
   final DateTime? createdAt;
   final DateTime? acceptedAt;
   final DateTime? startedAt;
@@ -35,6 +44,11 @@ class RideModel {
   static const started = 'started';
   static const completed = 'completed';
   static const cancelled = 'cancelled';
+
+  static const paymentCash = 'cash';
+  static const paymentUpi = 'upi';
+  static const paymentPending = 'pending';
+  static const paymentPaid = 'paid';
 
   const RideModel({
     required this.rideId,
@@ -60,6 +74,15 @@ class RideModel {
     this.saathiLng = 0,
     this.cancelReason = '',
     this.rating = 0,
+    this.paymentMethod = paymentCash,
+    this.paymentStatus = paymentPending,
+    this.baseFare = 0,
+    this.distanceCharge = 0,
+    this.surgeMultiplier = 1.0,
+    this.lateNightFee = 0,
+    this.gstAmount = 0,
+    this.platformFee = 0,
+    this.promoDiscount = 0,
     this.createdAt,
     this.acceptedAt,
     this.startedAt,
@@ -92,6 +115,15 @@ class RideModel {
       distanceMeters: (d['distanceMeters'] ?? d['distance'])?.toDouble(),
       cancelReason: d['cancelReason'] ?? '',
       rating: (d['rating'] ?? 0).toInt(),
+      paymentMethod: d['paymentMethod'] ?? paymentCash,
+      paymentStatus: d['paymentStatus'] ?? paymentPending,
+      baseFare: (d['baseFare'] ?? 0).toDouble(),
+      distanceCharge: (d['distanceCharge'] ?? 0).toDouble(),
+      surgeMultiplier: (d['surgeMultiplier'] ?? 1.0).toDouble(),
+      lateNightFee: (d['lateNightFee'] ?? 0).toDouble(),
+      gstAmount: (d['gstAmount'] ?? 0).toDouble(),
+      platformFee: (d['platformFee'] ?? 0).toDouble(),
+      promoDiscount: (d['promoDiscount'] ?? 0).toDouble(),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
       acceptedAt: (d['acceptedAt'] as Timestamp?)?.toDate(),
       startedAt: (d['startedAt'] as Timestamp?)?.toDate(),
@@ -121,6 +153,15 @@ class RideModel {
         'saathiLng': saathiLng,
         'cancelReason': cancelReason,
         'rating': rating,
+        'paymentMethod': paymentMethod,
+        'paymentStatus': paymentStatus,
+        'baseFare': baseFare,
+        'distanceCharge': distanceCharge,
+        'surgeMultiplier': surgeMultiplier,
+        'lateNightFee': lateNightFee,
+        'gstAmount': gstAmount,
+        'platformFee': platformFee,
+        'promoDiscount': promoDiscount,
         'createdAt': FieldValue.serverTimestamp(),
         'acceptedAt': acceptedAt != null ? Timestamp.fromDate(acceptedAt!) : null,
         'startedAt': startedAt != null ? Timestamp.fromDate(startedAt!) : null,
