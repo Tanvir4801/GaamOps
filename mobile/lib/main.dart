@@ -4,16 +4,43 @@ import 'constants/app_colors.dart';
 import 'constants/app_strings.dart';
 import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
-import 'services/notification_service.dart';
-import 'services/migration_service.dart';
-import 'services/settings_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  print('STEP 1');
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  print('STEP 2');
+
+  runApp(const GaamRideApp());
+
+  WidgetsFlutterBinding.ensureInitialized();
+
+  print('STEP 1');
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  print('STEP 2');
+
+
+  print('STEP 3');
+
+
+  print('STEP 4');
+
+  runApp(const GaamRideApp());
+
+  WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await NotificationService.initialize();
-  await MigrationService.runMigrations();
+  //await NotificationService.initialize();
+  //await MigrationService.runMigrations();
 
   runApp(const GaamRideApp());
 }
@@ -48,7 +75,7 @@ class GaamRideApp extends StatelessWidget {
             ),
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 1,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),

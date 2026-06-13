@@ -37,37 +37,49 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _controller.forward().then((_) => _navigate());
   }
+Future<void> _navigate() async {
+  print('NAV 1');
 
-  Future<void> _navigate() async {
+  try {
     final settings = await SettingsService.getSettings();
+    print('NAV 2');
+
     if (settings.maintenanceMode && mounted) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const MaintenanceScreen()),
+        MaterialPageRoute(
+          builder: (_) => const MaintenanceScreen(),
+        ),
         (_) => false,
       );
       return;
     }
 
     final user = FirebaseAuth.instance.currentUser;
+    print('NAV 3 user = $user');
+
     if (user == null) {
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-          (_) => false,
-        );
-      }
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const WelcomeScreen(),
+        ),
+        (_) => false,
+      );
       return;
     }
 
     final userModel = await AuthService.getUser(user.uid);
+    print('NAV 4 userModel = $userModel');
+
     if (!mounted) return;
 
     if (userModel == null) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+        MaterialPageRoute(
+          builder: (_) => const WelcomeScreen(),
+        ),
         (_) => false,
       );
       return;
@@ -76,18 +88,32 @@ class _SplashScreenState extends State<SplashScreen>
     if (userModel.role == 'saathi') {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const SaathiMainShell()),
+        MaterialPageRoute(
+          builder: (_) => const SaathiMainShell(),
+        ),
         (_) => false,
       );
     } else {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const CustomerMainShell()),
+        MaterialPageRoute(
+          builder: (_) => const CustomerMainShell(),
+        ),
         (_) => false,
       );
     }
-  }
+  } catch (e) {
+    print('SPLASH ERROR: $e');
 
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const WelcomeScreen(),
+      ),
+      (_) => false,
+    );
+  }
+}
   @override
   void dispose() {
     _controller.dispose();

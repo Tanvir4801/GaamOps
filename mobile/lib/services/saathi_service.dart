@@ -7,8 +7,8 @@ class SaathiService {
 
   static Future<void> goOnline(String uid) async {
     final pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
+  desiredAccuracy: LocationAccuracy.high,
+);
     final geoPoint = GeoFirePoint(GeoPoint(pos.latitude, pos.longitude));
     await _saathis.doc(uid).update({
       'isAvailable': true,

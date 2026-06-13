@@ -33,12 +33,57 @@ class FavouriteRoute {
         'createdAt': FieldValue.serverTimestamp(),
       };
 }
-
 class FavouriteRoutesScreen extends StatefulWidget {
   const FavouriteRoutesScreen({super.key});
 
+  static Future<void> saveRoute({
+    required String pickupVillage,
+    required String destinationVillage,
+    double? estimatedFare,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final col = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('favourites');
+
+    final existing = await col
+        .where('pickupVillage', isEqualTo: pickupVillage)
+        .where('destinationVillage', isEqualTo: destinationVillage)
+        .get();
+
+    if (existing.docs.isEmpty) {
+      await col.add({
+        'pickupVillage': pickupVillage,
+        'destinationVillage': destinationVillage,
+        'estimatedFare': estimatedFare ?? 0,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  static Future<List<FavouriteRoute>> loadRoutes() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return [];
+
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('favourites')
+        .orderBy('createdAt', descending: true)
+        .limit(5)
+        .get();
+
+    return snap.docs
+        .map((d) => FavouriteRoute.fromDoc(d))
+        .toList();
+  }
+
   @override
-  State<FavouriteRoutesScreen> createState() => _FavouriteRoutesScreenState();
+  State<FavouriteRoutesScreen> createState() =>
+      _FavouriteRoutesScreenState();
 }
 
 class _FavouriteRoutesScreenState extends State<FavouriteRoutesScreen> {
@@ -47,6 +92,7 @@ class _FavouriteRoutesScreenState extends State<FavouriteRoutesScreen> {
 
   CollectionReference get _col {
     final uid = FirebaseAuth.instance.currentUser!.uid;
+
     return FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -60,61 +106,24 @@ class _FavouriteRoutesScreenState extends State<FavouriteRoutesScreen> {
   }
 
   Future<void> _load() async {
-    final snap = await _col.orderBy('createdAt', descending: true).get();
-    if (mounted) {
-      setState(() {
-        _routes = snap.docs.map((d) => FavouriteRoute.fromDoc(d)).toList();
-        _loading = false;
-      });
-    }
+    final snap =
+        await _col.orderBy('createdAt', descending: true).get();
+
+    if (!mounted) return;
+
+    setState(() {
+      _routes =
+          snap.docs.map((d) => FavouriteRoute.fromDoc(d)).toList();
+      _loading = false;
+    });
   }
 
   Future<void> _delete(String id) async {
     await _col.doc(id).delete();
-    setState(() => _routes.removeWhere((r) => r.id == id));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Route removed from favourites')),
-      );
-    }
-  }
 
-  static Future<void> saveRoute({
-    required String pickupVillage,
-    required String destinationVillage,
-    double? estimatedFare,
-  }) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final col = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('favourites');
-    final existing = await col
-        .where('pickupVillage', isEqualTo: pickupVillage)
-        .where('destinationVillage', isEqualTo: destinationVillage)
-        .get();
-    if (existing.docs.isEmpty) {
-      await col.add(FavouriteRoute(
-        id: '',
-        pickupVillage: pickupVillage,
-        destinationVillage: destinationVillage,
-        estimatedFare: estimatedFare,
-      ).toMap());
-    }
-  }
-
-  static Future<List<FavouriteRoute>> loadRoutes() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return [];
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('favourites')
-        .orderBy('createdAt', descending: true)
-        .limit(5)
-        .get();
-    return snap.docs.map((d) => FavouriteRoute.fromDoc(d)).toList();
+    setState(() {
+      _routes.removeWhere((e) => e.id == id);
+    });
   }
 
   @override
@@ -122,35 +131,27 @@ class _FavouriteRoutesScreenState extends State<FavouriteRoutesScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        title: const Text(
-          'Favourite Routes',
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textDark),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text('Favourite Routes'),
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryGreen))
+              child: CircularProgressIndicator(),
+            )
           : _routes.isEmpty
               ? _EmptyState()
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
+              : ListView.builder(
                   itemCount: _routes.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) => _RouteCard(
-                    route: _routes[i],
-                    onDelete: () => _delete(_routes[i].id),
-                  ),
+                  itemBuilder: (context, index) {
+                    return _RouteCard(
+                      route: _routes[index],
+                      onDelete: () =>
+                          _delete(_routes[index].id),
+                    );
+                  },
                 ),
     );
   }
 }
-
 class _RouteCard extends StatelessWidget {
   final FavouriteRoute route;
   final VoidCallback onDelete;

@@ -12,9 +12,7 @@ class LocationService {
     if (!hasPermission) return null;
     try {
       return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
+         desiredAccuracy: LocationAccuracy.high,
       );
     } catch (_) {
       return null;

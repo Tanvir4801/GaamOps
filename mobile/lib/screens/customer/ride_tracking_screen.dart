@@ -9,7 +9,7 @@ import '../../services/ride_service.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/radar_searching_widget.dart';
 import 'ride_complete_screen.dart';
-import 'emergency_contacts_screen.dart';
+import '../../services/emergency_contact_service.dart';
 
 class RideTrackingScreen extends StatefulWidget {
   final String rideId;
@@ -220,8 +220,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
   }
 
   void _showSOS() async {
-    final contacts = await EmergencyContactsScreen.getContacts();
-
+final contacts = await EmergencyContactService.getContacts();
     if (!mounted) return;
     if (contacts.isEmpty) {
       final uri = Uri(scheme: 'tel', path: '112');

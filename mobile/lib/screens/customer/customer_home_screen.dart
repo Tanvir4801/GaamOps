@@ -52,34 +52,42 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
   }
 
   Future<void> _init() async {
-    setState(() => _loading = true);
-    final results = await Future.wait([
-      VillageService.getVillages(),
-      SettingsService.getSettings(),
-      _loadUserName(),
-      _loadLocation(),
-      FavouriteRoutesScreen.loadRoutes(),
-    ]);
+  setState(() => _loading = true);
 
-    final villages = results[0] as List<VillageModel>;
-    final settings = results[1] as dynamic;
-    final favRoutes = results[4] as List<FavouriteRoute>;
+  final results = await Future.wait([
+    VillageService.getVillages(),
+    SettingsService.getSettings(),
+    _loadUserName(),
+    _loadLocation(),
+    FavouriteRoutesScreen.loadRoutes(),
+  ]);
+
+  final villages = results[0] as List<VillageModel>;
+  final settings = results[1] as dynamic;
+  final favRoutes = results[4] as List<FavouriteRoute>;
+
+  if (mounted) {
+    setState(() {
+      _villages = villages;
+      _settings = settings.toMap();
+      _favouriteRoutes = favRoutes;
+      _loading = false;
+    });
+  }
+
+  if (_myPosition != null && villages.isNotEmpty) {
+    final nearest = VillageService.nearest(
+      _myPosition!.latitude,
+      _myPosition!.longitude,
+      villages,
+    );
 
     if (mounted) {
-      setState(() {
-        _villages = villages;
-        _settings = settings.toMap();
-        _favouriteRoutes = favRoutes;
-        _loading = false;
-      });
-    }
-
-    if (_myPosition != null && villages.isNotEmpty) {
-      final nearest = VillageService.nearest(
-          _myPosition!.latitude, _myPosition!.longitude, villages);
-      if (mounted) setState(() => _pickupVillage = nearest);
+      setState(() => _pickupVillage = nearest);
     }
   }
+}
+  
 
   Future<void> _loadUserName() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -141,7 +149,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
           pickupVillage: _pickupVillage!,
           destinationVillage: _destinationVillage!,
           saathi: saathi,
-          fare: _estimatedFare(),
         ),
       ),
     );
@@ -648,7 +655,7 @@ class _SaathiCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withAlpha(15),
               blurRadius: 10,
               offset: const Offset(0, 2)),
         ],

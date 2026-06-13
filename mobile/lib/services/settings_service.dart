@@ -5,19 +5,35 @@ class SettingsService {
   static AppSettingsModel? _cached;
 
   static Future<AppSettingsModel> getSettings() async {
-    if (_cached != null) return _cached!;
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('app_settings')
-          .doc('config')
-          .get();
-      if (doc.exists) {
-        _cached = AppSettingsModel.fromFirestore(doc.data()!);
-        return _cached!;
-      }
-    } catch (_) {}
-    return AppSettingsModel.defaults();
+  print('SETTINGS 1');
+
+  if (_cached != null) {
+    print('SETTINGS CACHE');
+    return _cached!;
   }
+
+  try {
+    print('SETTINGS 2');
+
+    final doc = await FirebaseFirestore.instance
+        .collection('app_settings')
+        .doc('config')
+        .get();
+
+    print('SETTINGS 3 exists=${doc.exists}');
+
+    if (doc.exists) {
+      _cached = AppSettingsModel.fromFirestore(doc.data()!);
+      print('SETTINGS 4');
+      return _cached!;
+    }
+  } catch (e) {
+    print('SETTINGS ERROR: $e');
+  }
+
+  print('SETTINGS DEFAULT');
+  return AppSettingsModel.defaults();
+}
 
   static void clearCache() => _cached = null;
 

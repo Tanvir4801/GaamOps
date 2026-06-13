@@ -90,6 +90,20 @@ class HaulBookingModel {
       completedAt: (d['completedAt'] as Timestamp?)?.toDate(),
     );
   }
+     String get vehicleTypeLabel {
+  switch (vehicleType.toLowerCase()) {
+    case 'tractor':
+      return 'Tractor';
+    case 'tempo':
+      return 'Tempo';
+    case 'pickup':
+      return 'Pickup';
+    case 'truck':
+      return 'Truck';
+    default:
+      return vehicleType;
+  }
+}
 
   String get durationLabel {
     switch (duration) {
@@ -101,3 +115,4 @@ class HaulBookingModel {
     }
   }
 }
+  

@@ -15,7 +15,7 @@ class FareCalculator {
     if (distanceKm <= 0 || distanceKm > 50) return min;
 
     double fare = base + (distanceKm * perKm);
-    fare = fare.clamp(min, max);
+    fare = fare.clamp(min, max).toDouble();
 
     return ((fare / 5).round() * 5).toDouble();
   }
