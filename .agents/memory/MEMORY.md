@@ -1,0 +1,2 @@
+- [Firebase project config](firebase-project.md) — Firebase project is `gaamride`, all VITE_FIREBASE_* secrets set as shared env vars
+- [Firestore collection names](firestore-collections.md) — canonical names that must be used everywhere; bugs were fixed from wrong names
