@@ -13,7 +13,7 @@ export default function VerificationsPage() {
   const { toast, showToast } = useToast()
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'saathi'), (snap) => {
+    const unsub = onSnapshot(collection(db, 'saathis'), (snap) => {
       setSaathi(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
     })
@@ -26,12 +26,12 @@ export default function VerificationsPage() {
     [saathi])
 
   const approve = async (id, name) => {
-    await updateDoc(doc(db, 'saathi', id), { status: 'active' })
+    await updateDoc(doc(db, 'saathis', id), { status: 'active' })
     showToast(`${name || 'Saathi'} approved`)
   }
 
   const reject = async (id, name) => {
-    await updateDoc(doc(db, 'saathi', id), { status: 'rejected' })
+    await updateDoc(doc(db, 'saathis', id), { status: 'rejected' })
     showToast(`${name || 'Saathi'} rejected`, 'error')
   }
 

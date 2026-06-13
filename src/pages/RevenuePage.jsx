@@ -6,7 +6,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { db } from '../firebase'
-import { toDate, formatCurrency, isSameDay, formatDate } from '../utils/formatters'
+import { toDate, formatCurrency } from '../utils/formatters'
 import { VILLAGES } from '../utils/constants'
 
 function StatCard({ label, value }) {
@@ -19,13 +19,14 @@ function StatCard({ label, value }) {
 }
 
 export default function RevenuePage() {
-  const [bookings, setBookings] = useState([])
+  const [rides, setRides] = useState([])
   const [haulBookings, setHaulBookings] = useState([])
 
   useEffect(() => {
+    if (!db) return
     const unsubs = [
-      onSnapshot(collection(db, 'bookings'), (snap) =>
-        setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      onSnapshot(collection(db, 'rides'), (snap) =>
+        setRides(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       ),
       onSnapshot(collection(db, 'haul_bookings'), (snap) =>
         setHaulBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
@@ -34,53 +35,50 @@ export default function RevenuePage() {
     return () => unsubs.forEach((u) => u())
   }, [])
 
-  const allCompleted = useMemo(() =>
-    bookings.filter((b) => String(b.status || '').toLowerCase() === 'completed'),
-    [bookings])
+  const completedRides = useMemo(() =>
+    rides.filter((r) => String(r.status || '').toLowerCase() === 'completed'),
+    [rides])
 
-  const allCompletedHauls = useMemo(() =>
-    [...bookings, ...haulBookings].filter(
-      (b) => b.type === 'GaamHaul' && String(b.status || '').toLowerCase() === 'completed'
-    ),
-    [bookings, haulBookings])
+  const completedHauls = useMemo(() =>
+    haulBookings.filter((h) => String(h.status || '').toLowerCase() === 'completed'),
+    [haulBookings])
 
   const rideRevenue = useMemo(() =>
-    allCompleted.filter((b) => b.type !== 'GaamHaul')
-      .reduce((s, b) => s + Number(b.fare || b.amount || 0), 0),
-    [allCompleted])
+    completedRides.reduce((s, r) => s + Number(r.fare || 0), 0),
+    [completedRides])
 
-  const haulRevenue = useMemo(() => allCompletedHauls.length * 75, [allCompletedHauls])
+  const haulRevenue = useMemo(() =>
+    completedHauls.reduce((s, h) => s + Number(h.appCommission || 75), 0),
+    [completedHauls])
 
   const now = new Date()
 
   const thisMonthRevenue = useMemo(() => {
-    const r = bookings.filter((b) => {
-      const d = toDate(b.timestamp || b.createdAt)
-      return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() &&
-        String(b.status || '').toLowerCase() === 'completed'
-    }).reduce((s, b) => s + Number(b.fare || b.amount || 0), 0)
-    const h = [...bookings, ...haulBookings].filter((b) => {
-      const d = toDate(b.timestamp || b.createdAt)
-      return d && b.type === 'GaamHaul' && d.getMonth() === now.getMonth() &&
-        d.getFullYear() === now.getFullYear() && String(b.status || '').toLowerCase() === 'completed'
-    }).length * 75
+    const r = completedRides.filter((ride) => {
+      const d = toDate(ride.createdAt)
+      return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+    }).reduce((s, r) => s + Number(r.fare || 0), 0)
+    const h = completedHauls.filter((haul) => {
+      const d = toDate(haul.createdAt)
+      return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+    }).reduce((s, h) => s + Number(h.appCommission || 75), 0)
     return r + h
-  }, [bookings, haulBookings])
+  }, [completedRides, completedHauls])
 
   const thisWeekRevenue = useMemo(() => {
     const weekStart = new Date(now)
     weekStart.setDate(now.getDate() - now.getDay())
     weekStart.setHours(0, 0, 0, 0)
-    const r = bookings.filter((b) => {
-      const d = toDate(b.timestamp || b.createdAt)
-      return d && d >= weekStart && String(b.status || '').toLowerCase() === 'completed' && b.type !== 'GaamHaul'
-    }).reduce((s, b) => s + Number(b.fare || b.amount || 0), 0)
-    const h = [...bookings, ...haulBookings].filter((b) => {
-      const d = toDate(b.timestamp || b.createdAt)
-      return d && d >= weekStart && b.type === 'GaamHaul' && String(b.status || '').toLowerCase() === 'completed'
-    }).length * 75
+    const r = completedRides.filter((ride) => {
+      const d = toDate(ride.createdAt)
+      return d && d >= weekStart
+    }).reduce((s, r) => s + Number(r.fare || 0), 0)
+    const h = completedHauls.filter((haul) => {
+      const d = toDate(haul.createdAt)
+      return d && d >= weekStart
+    }).reduce((s, h) => s + Number(h.appCommission || 75), 0)
     return r + h
-  }, [bookings, haulBookings])
+  }, [completedRides, completedHauls])
 
   const last30Days = useMemo(() => {
     const days = []
@@ -90,47 +88,51 @@ export default function RevenuePage() {
       d.setHours(0, 0, 0, 0)
       const key = d.toISOString().slice(0, 10)
       const label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
-      const allB = [...bookings, ...haulBookings]
-      const dayBookings = allB.filter((b) => {
-        const bd = toDate(b.timestamp || b.createdAt)
-        return bd && bd.toISOString().slice(0, 10) === key && String(b.status || '').toLowerCase() === 'completed'
-      })
-      const ride = dayBookings.filter((b) => b.type !== 'GaamHaul').reduce((s, b) => s + Number(b.fare || b.amount || 0), 0)
-      const haul = dayBookings.filter((b) => b.type === 'GaamHaul').length * 75
-      days.push({ label, GaamRide: ride, GaamHaul: haul, total: ride + haul })
+
+      const rideRev = completedRides.filter((r) => {
+        const rd = toDate(r.createdAt)
+        return rd && rd.toISOString().slice(0, 10) === key
+      }).reduce((s, r) => s + Number(r.fare || 0), 0)
+
+      const haulRev = completedHauls.filter((h) => {
+        const hd = toDate(h.createdAt)
+        return hd && hd.toISOString().slice(0, 10) === key
+      }).reduce((s, h) => s + Number(h.appCommission || 75), 0)
+
+      days.push({ label, GaamRide: rideRev, GaamHaul: haulRev, total: rideRev + haulRev })
     }
     return days
-  }, [bookings, haulBookings])
+  }, [completedRides, completedHauls])
 
   const villageRevenue = useMemo(() => {
     const map = {}
     VILLAGES.forEach((v) => { map[v.name] = 0 })
-    bookings.filter((b) => String(b.status || '').toLowerCase() === 'completed').forEach((b) => {
-      const village = b.pickupVillage || b.fromVillage || b.pickupLocation
+    completedRides.forEach((r) => {
+      const village = r.pickupVillage
       if (village && map[village] !== undefined) {
-        map[village] += Number(b.fare || b.amount || 0)
+        map[village] += Number(r.fare || 0)
       }
     })
     return Object.entries(map).map(([name, value]) => ({ name, value })).filter((e) => e.value > 0)
-  }, [bookings])
+  }, [completedRides])
 
   const topSaathi = useMemo(() => {
     const map = {}
-    bookings.filter((b) => String(b.status || '').toLowerCase() === 'completed').forEach((b) => {
-      const name = b.saathiName || b.driverName || b.assignedDriverName || b.assignedDriverId
+    completedRides.forEach((r) => {
+      const name = r.saathiName
       if (name) map[name] = (map[name] || 0) + 1
     })
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5)
-  }, [bookings])
+  }, [completedRides])
 
   const topVillages = useMemo(() => {
     const map = {}
-    bookings.forEach((b) => {
-      const v = b.pickupVillage || b.fromVillage
+    rides.forEach((r) => {
+      const v = r.pickupVillage
       if (v) map[v] = (map[v] || 0) + 1
     })
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5)
-  }, [bookings])
+  }, [rides])
 
   const exportCSV = () => {
     const rows = last30Days.map((d) => `"${d.label}","${d.GaamRide}","${d.GaamHaul}","${d.total}"`)

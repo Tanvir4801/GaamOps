@@ -106,10 +106,10 @@ export default function BookingsPage() {
 
   useEffect(() => {
     const unsubs = [
-      onSnapshot(collection(db, 'bookings'), (snapshot) => {
+      onSnapshot(collection(db, 'rides'), (snapshot) => {
         setBookings(snapshot.docs.map((docRef) => ({ id: docRef.id, ...docRef.data() })))
       }),
-      onSnapshot(collection(db, 'saathi'), (snapshot) => {
+      onSnapshot(collection(db, 'saathis'), (snapshot) => {
         setSaathi(snapshot.docs.map((docRef) => ({ id: docRef.id, ...docRef.data() })))
       }),
       onSnapshot(collection(db, 'users'), (snapshot) => {

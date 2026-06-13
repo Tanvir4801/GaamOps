@@ -1,0 +1,865 @@
+I am building GaamRide Flutter app. My Firestore backend is messy 
+with duplicate collections, wrong field names, and inconsistent 
+structure. I need a complete automated migration and cleanup.
+
+## CURRENT PROBLEMS I CAN SEE IN FIRESTORE
+
+1. TWO saathi collections: `saathi` (phone as docId) 
+   AND `saathis` (uid as docId) — duplicate, causes confusion
+2. `locations` collection — unnecessary, duplicates position data
+3. `driver_requests` collection — should not exist separately,
+   this data belongs inside bookings
+4. `villages` collection has wrong coordinates (lat: 22.92 
+   instead of correct 20.83)
+5. `bookings` uses a `type` field ('ride' or 'haul') to 
+   mix two different things — confusing
+6. `users` collection missing important fields
+7. `saathi` collection uses phone number as document ID 
+   instead of Firebase Auth UID
+
+---
+
+## CORRECT FINAL FIRESTORE STRUCTURE
+
+### Collection 1: users/{uid}
+Every registered user. Doc ID = Firebase Auth UID.
+{
+
+uid: string,
+
+name: string,           // "Tanvir Patel"
+
+displayName: string,    // same as name
+
+phone: string,          // "+917621984915"
+
+role: string,           // "customer" | "saathi" | "both"
+
+village: string,        // "Kos"
+
+profilePhoto: string,   // url or ""
+
+fcmToken: string,       // for push notifications
+
+isBlocked: false,       // admin can block
+
+createdAt: timestamp,
+
+updatedAt: timestamp
+
+}
+
+### Collection 2: saathis/{uid}  
+Only ride drivers. Doc ID = Firebase Auth UID. ONE collection only.
+{
+
+uid: string,
+
+name: string,
+
+phone: string,
+
+village: string,
+
+vehicleType: string,    // "bike" | "auto" | "cycle"
+
+vehicleNumber: string,  // "GJ05AB1234"
+
+isAvailable: boolean,   // online/offline toggle
+
+isOnline: boolean,      // same as isAvailable
+
+isBlocked: boolean,     // admin control
+
+position: {             // GeoFirePoint format
+
+geohash: string,
+
+geopoint: GeoPoint
+
+},
+
+lastSeen: timestamp,
+
+rating: number,         // default 5.0
+
+totalRides: number,     // default 0
+
+fcmToken: string,
+
+createdAt: timestamp,
+
+updatedAt: timestamp
+
+}
+
+### Collection 3: rides/{rideId}
+All ride bookings (GaamRide). Separate from haul.
+Doc ID = auto-generated.
+{
+
+rideId: string,
+
+customerId: string,       // uid
+
+customerName: string,
+
+customerPhone: string,
+
+saathiId: string,         // uid, empty until accepted
+
+saathiName: string,
+
+saathiPhone: string,
+
+pickupVillage: string,
+
+pickupLat: number,
+
+pickupLng: number,
+
+destinationVillage: string,
+
+destinationLat: number,
+
+destinationLng: number,
+
+status: string,           // searching|accepted|arriving
+
+// started|completed|cancelled
+
+fare: number,
+
+distance: number,         // in km
+
+otp: string,              // 4 digit
+
+saathiLat: number,        // live tracking
+
+saathiLng: number,        // live tracking
+
+cancelReason: string,
+
+rating: number,
+
+createdAt: timestamp,
+
+acceptedAt: timestamp,
+
+startedAt: timestamp,
+
+completedAt: timestamp
+
+}
+
+### Collection 4: haul_bookings/{bookingId}
+All vehicle/tempo bookings (GaamHaul). Separate from rides.
+{
+
+bookingId: string,
+
+customerId: string,
+
+customerName: string,
+
+customerPhone: string,
+
+vehicleOwnerId: string,
+
+ownerName: string,
+
+ownerPhone: string,
+
+vehicleType: string,      // mini_tempo|pickup|tractor|truck_407
+
+duration: string,         // 1h|2h|half_day|full_day
+
+durationHours: number,
+
+loadDescription: string,
+
+pickupVillage: string,
+
+pickupLat: number,
+
+pickupLng: number,
+
+status: string,           // searching|accepted|started|completed|cancelled
+
+appCommission: number,    // always 75
+
+ownerEarnings: number,    // ratePerHour * hours
+
+ownerLat: number,         // live tracking
+
+ownerLng: number,
+
+cancelReason: string,
+
+createdAt: timestamp,
+
+acceptedAt: timestamp,
+
+completedAt: timestamp
+
+}
+
+### Collection 5: haul_vehicles/{uid}
+Vehicle owners for GaamHaul. Doc ID = Firebase Auth UID.
+{
+
+uid: string,
+
+ownerName: string,
+
+phone: string,
+
+village: string,
+
+vehicleType: string,      // mini_tempo|pickup|tractor|truck_407
+
+capacity: string,         // "500kg"|"1000kg"|"2000kg"
+
+ratePerHour: number,      // e.g. 600
+
+vehicleNumber: string,
+
+isAvailable: boolean,
+
+position: {
+
+geohash: string,
+
+geopoint: GeoPoint
+
+},
+
+lastSeen: timestamp,
+
+totalBookings: number,
+
+fcmToken: string,
+
+createdAt: timestamp
+
+}
+
+### Collection 6: villages/{villageId}
+Doc ID = village name lowercase. Fixed coordinates.
+{
+
+name: string,       // "Anaval"
+
+nameGu: string,     // "આણવલ"
+
+lat: number,        // CORRECT coordinates (20.8306 range)
+
+lng: number,        // CORRECT coordinates (73.24 range)
+
+isActive: boolean,
+
+taluka: string      // "Mahuva"
+
+}
+
+### Collection 7: app_settings/config
+Single document for admin-controlled settings.
+{
+
+rideFareBase: 20,
+
+rideFarePerKm: 8,
+
+rideFareMinimum: 25,
+
+rideFareMaximum: 200,
+
+haulCommission: 75,
+
+serviceZoneSW: {lat: 20.780, lng: 73.190},
+
+serviceZoneNE: {lat: 20.920, lng: 73.320},
+
+maintenanceMode: false,
+
+appVersion: "1.0.0"
+
+}
+
+### COLLECTIONS TO DELETE
+- `saathi` (duplicate of saathis, wrong doc IDs)
+- `locations` (unnecessary, position is in saathis)
+- `driver_requests` (this data moves into rides collection)
+- `bookings` (split into rides + haul_bookings)
+
+---
+
+## STEP 1 — Create migration service
+
+Create file: lib/services/migration_service.dart
+
+This service runs automatically on app start in debug mode.
+It does all cleanup and data fixes programmatically.
+
+```dart
+class MigrationService {
+  
+  static Future<void> runMigrations() async {
+    if (!kDebugMode) return; 
+    // Safety: only runs in debug, never in production
+    
+    await _fixVillageCoordinates();
+    await _mergeOldSaathiCollection();
+    await _createAppSettings();
+    await _migrateBooingCollection();
+    
+    debugPrint('✅ GaamRide migrations complete');
+  }
+}
+```
+
+---
+
+## STEP 2 — Fix village coordinates
+
+In migration_service.dart, add _fixVillageCoordinates():
+
+```dart
+static Future<void> _fixVillageCoordinates() async {
+  
+  // These are the CORRECT coordinates for villages
+  // near Anaval, Mahuva Taluka, Surat district
+  final correctVillages = [
+    {
+      'id': 'anaval',
+      'name': 'Anaval',
+      'nameGu': 'આણવલ',
+      'lat': 20.8394,    // from locations collection screenshot
+      'lng': 73.2637,    // from locations collection screenshot  
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+    {
+      'id': 'kos',
+      'name': 'Kos',
+      'nameGu': 'કૉસ',
+      'lat': 20.8480,
+      'lng': 73.2350,
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+    {
+      'id': 'tarkani',
+      'name': 'Tarkani',
+      'nameGu': 'તારકણી',
+      'lat': 20.8550,
+      'lng': 73.2580,
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+    {
+      'id': 'angaldhara',
+      'name': 'Angaldhara',
+      'nameGu': 'અંગળધરા',
+      'lat': 20.8180,
+      'lng': 73.2280,
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+    {
+      'id': 'dholikuva',
+      'name': 'Dholikuva',
+      'nameGu': 'ઢોળીકૂવા',
+      'lat': 20.8650,
+      'lng': 73.2800,
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+    {
+      'id': 'lakhavadi',
+      'name': 'Lakhavadi',
+      'nameGu': 'લખાવડી',
+      'lat': 20.8050,
+      'lng': 73.2150,
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+    {
+      'id': 'unai',
+      'name': 'Unai',
+      'nameGu': 'ઉનાઈ',
+      'lat': 20.8550,
+      'lng': 73.2100,
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+    {
+      'id': 'doldha',
+      'name': 'Doldha',
+      'nameGu': 'ડોળધા',
+      'lat': 20.7950,
+      'lng': 73.2600,
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+    {
+      'id': 'kamboya',
+      'name': 'Kamboya',
+      'nameGu': 'કાંબોયા',
+      'lat': 20.8750,
+      'lng': 73.2200,
+      'isActive': true,
+      'taluka': 'Mahuva'
+    },
+  ];
+
+  final batch = FirebaseFirestore.instance.batch();
+  
+  for (final village in correctVillages) {
+    final ref = FirebaseFirestore.instance
+        .collection('villages')
+        .doc(village['id'] as String);
+    batch.set(ref, village, SetOptions(merge: true));
+  }
+  
+  await batch.commit();
+  debugPrint('✅ Villages fixed with correct coordinates');
+}
+```
+
+---
+
+## STEP 3 — Merge old saathi collection into saathis
+
+```dart
+static Future<void> _mergeOldSaathiCollection() async {
+  
+  // Read all docs from old `saathi` collection (phone as ID)
+  final oldDocs = await FirebaseFirestore.instance
+      .collection('saathi')
+      .get();
+  
+  if (oldDocs.docs.isEmpty) {
+    debugPrint('No old saathi docs to migrate');
+    return;
+  }
+  
+  final batch = FirebaseFirestore.instance.batch();
+  
+  for (final doc in oldDocs.docs) {
+    final data = doc.data();
+    
+    // Try to find matching user by phone
+    final phone = data['phone'] as String? ?? doc.id;
+    final usersQuery = await FirebaseFirestore.instance
+        .collection('users')
+        .where('phone', isEqualTo: phone)
+        .limit(1)
+        .get();
+    
+    if (usersQuery.docs.isNotEmpty) {
+      final uid = usersQuery.docs.first.id;
+      
+      // Write to saathis collection with uid as doc ID
+      final newRef = FirebaseFirestore.instance
+          .collection('saathis')
+          .doc(uid);
+      
+      batch.set(newRef, {
+        ...data,
+        'uid': uid,
+        'isAvailable': data['isAvailable'] ?? false,
+        'isOnline': data['isOnline'] ?? false,
+        'rating': (data['rating'] ?? 5).toDouble(),
+        'totalRides': data['totalRides'] ?? 0,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+  }
+  
+  await batch.commit();
+  debugPrint('✅ Old saathi collection merged into saathis');
+  
+  // NOTE: Do NOT delete old saathi collection here
+  // Delete manually from Firebase Console after verifying
+  // old collection: saathi
+  // delete collection: locations
+  // delete collection: driver_requests  
+}
+```
+
+---
+
+## STEP 4 — Create app_settings document
+
+```dart
+static Future<void> _createAppSettings() async {
+  
+  final ref = FirebaseFirestore.instance
+      .collection('app_settings')
+      .doc('config');
+  
+  final existing = await ref.get();
+  if (existing.exists) return; // don't overwrite if exists
+  
+  await ref.set({
+    'rideFareBase': 20,
+    'rideFarePerKm': 8,
+    'rideFareMinimum': 25,
+    'rideFareMaximum': 200,
+    'haulCommission': 75,
+    'serviceZoneSW': {'lat': 20.780, 'lng': 73.190},
+    'serviceZoneNE': {'lat': 20.920, 'lng': 73.320},
+    'maintenanceMode': false,
+    'appVersion': '1.0.0',
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+  
+  debugPrint('✅ App settings created');
+}
+```
+
+---
+
+## STEP 5 — Migrate old bookings to rides collection
+
+```dart
+static Future<void> _migrateBooingCollection() async {
+  
+  // Read old bookings collection
+  final oldBookings = await FirebaseFirestore.instance
+      .collection('bookings')
+      .get();
+  
+  if (oldBookings.docs.isEmpty) return;
+  
+  final batch = FirebaseFirestore.instance.batch();
+  
+  for (final doc in oldBookings.docs) {
+    final data = doc.data();
+    final type = data['type'] as String? ?? 'ride';
+    
+    if (type == 'ride') {
+      // Move to rides collection
+      final rideRef = FirebaseFirestore.instance
+          .collection('rides')
+          .doc(doc.id);
+      
+      batch.set(rideRef, {
+        'rideId': doc.id,
+        'customerId': data['userId'] ?? data['customerId'] ?? '',
+        'customerName': data['customerName'] ?? '',
+        'customerPhone': data['customerPhone'] ?? '',
+        'saathiId': data['assignedDriverId'] ?? '',
+        'pickupVillage': data['pickupVillage'] ?? '',
+        'pickupLat': data['pickupLat'] ?? 0.0,
+        'pickupLng': data['pickupLng'] ?? 0.0,
+        'destinationVillage': data['destinationVillage'] ?? '',
+        'status': data['status'] ?? 'cancelled',
+        'fare': data['fare'] ?? 0,
+        'cancelReason': data['cancelReason'] ?? '',
+        'createdAt': data['createdAt'],
+        'migratedFrom': 'bookings',
+      }, SetOptions(merge: true));
+      
+    } else if (type == 'haul') {
+      // Move to haul_bookings collection
+      final haulRef = FirebaseFirestore.instance
+          .collection('haul_bookings')
+          .doc(doc.id);
+      
+      batch.set(haulRef, {
+        'bookingId': doc.id,
+        'customerId': data['userId'] ?? '',
+        'vehicleType': data['vehicleType'] ?? '',
+        'pickupVillage': data['pickupVillage'] ?? '',
+        'pickupLat': data['pickupLat'] ?? 0.0,
+        'pickupLng': data['pickupLng'] ?? 0.0,
+        'status': data['status'] ?? 'cancelled',
+        'appCommission': 75,
+        'createdAt': data['createdAt'],
+        'migratedFrom': 'bookings',
+      }, SetOptions(merge: true));
+    }
+  }
+  
+  await batch.commit();
+  debugPrint('✅ Old bookings migrated to rides + haul_bookings');
+}
+```
+
+---
+
+## STEP 6 — Run migration from main.dart
+
+In main.dart, call migration on startup in debug mode:
+
+```dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  // Run migrations in debug mode only
+  if (kDebugMode) {
+    await MigrationService.runMigrations();
+  }
+  
+  runApp(const GaamRideApp());
+}
+```
+
+---
+
+## STEP 7 — Update all service files to use correct collections
+
+### lib/services/ride_service.dart
+Use collection: `rides` (not `bookings`)
+
+```dart
+class RideService {
+  static final _db = FirebaseFirestore.instance;
+  static final _rides = _db.collection('rides');
+  
+  // Create new ride request
+  static Future<String> createRide({
+    required String customerId,
+    required String customerName,
+    required String customerPhone,
+    required String pickupVillage,
+    required double pickupLat,
+    required double pickupLng,
+    required String destinationVillage,
+    required double destinationLat,
+    required double destinationLng,
+    required double fare,
+    required double distance,
+  }) async {
+    final rideRef = _rides.doc();
+    final otp = (1000 + Random().nextInt(9000)).toString();
+    
+    await rideRef.set({
+      'rideId': rideRef.id,
+      'customerId': customerId,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+      'saathiId': '',
+      'saathiName': '',
+      'saathiPhone': '',
+      'pickupVillage': pickupVillage,
+      'pickupLat': pickupLat,
+      'pickupLng': pickupLng,
+      'destinationVillage': destinationVillage,
+      'destinationLat': destinationLat,
+      'destinationLng': destinationLng,
+      'status': 'searching',
+      'fare': fare,
+      'distance': distance,
+      'otp': otp,
+      'saathiLat': 0.0,
+      'saathiLng': 0.0,
+      'cancelReason': '',
+      'rating': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    
+    return rideRef.id;
+  }
+  
+  // Saathi accepts ride
+  static Future<void> acceptRide({
+    required String rideId,
+    required String saathiId,
+    required String saathiName,
+    required String saathiPhone,
+  }) async {
+    await _rides.doc(rideId).update({
+      'saathiId': saathiId,
+      'saathiName': saathiName,
+      'saathiPhone': saathiPhone,
+      'status': 'accepted',
+      'acceptedAt': FieldValue.serverTimestamp(),
+    });
+  }
+  
+  // Update Saathi live location during ride
+  static Future<void> updateSaathiLocation({
+    required String rideId,
+    required double lat,
+    required double lng,
+  }) async {
+    await _rides.doc(rideId).update({
+      'saathiLat': lat,
+      'saathiLng': lng,
+    });
+  }
+  
+  // Start ride (after OTP verified)
+  static Future<void> startRide(String rideId) async {
+    await _rides.doc(rideId).update({
+      'status': 'started',
+      'startedAt': FieldValue.serverTimestamp(),
+    });
+  }
+  
+  // Complete ride
+  static Future<void> completeRide(String rideId) async {
+    await _rides.doc(rideId).update({
+      'status': 'completed',
+      'completedAt': FieldValue.serverTimestamp(),
+    });
+    
+    // Increment saathi total rides
+    final ride = await _rides.doc(rideId).get();
+    final saathiId = ride.data()!['saathiId'];
+    if (saathiId != null && saathiId != '') {
+      await FirebaseFirestore.instance
+          .collection('saathis')
+          .doc(saathiId)
+          .update({'totalRides': FieldValue.increment(1)});
+    }
+  }
+  
+  // Listen to ride status (real-time)
+  static Stream<DocumentSnapshot> listenToRide(String rideId) {
+    return _rides.doc(rideId).snapshots();
+  }
+  
+  // Get pending rides for a saathi (incoming requests)
+  static Stream<QuerySnapshot> listenForIncomingRides(
+      String saathiVillage) {
+    return _rides
+        .where('status', isEqualTo: 'searching')
+        .orderBy('createdAt', descending: true)
+        .limit(10)
+        .snapshots();
+  }
+}
+```
+
+### lib/services/saathi_service.dart
+Use collection: `saathis` only (not `saathi`)
+
+```dart
+class SaathiService {
+  static final _saathis = 
+      FirebaseFirestore.instance.collection('saathis');
+  
+  // Go online — start location updates
+  static Future<void> goOnline(String uid) async {
+    final pos = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+      ),
+    );
+    
+    final geoPoint = GeoFirePoint(pos.latitude, pos.longitude);
+    
+    await _saathis.doc(uid).update({
+      'isAvailable': true,
+      'isOnline': true,
+      'position': geoPoint.data,
+      'lastSeen': FieldValue.serverTimestamp(),
+    });
+  }
+  
+  // Go offline
+  static Future<void> goOffline(String uid) async {
+    await _saathis.doc(uid).update({
+      'isAvailable': false,
+      'isOnline': false,
+      'lastSeen': FieldValue.serverTimestamp(),
+    });
+  }
+  
+  // Update live location (called every 10 sec when online)
+  static Future<void> updateLocation(
+      String uid, double lat, double lng) async {
+    final geoPoint = GeoFirePoint(lat, lng);
+    await _saathis.doc(uid).update({
+      'position': geoPoint.data,
+      'lastSeen': FieldValue.serverTimestamp(),
+    });
+  }
+  
+  // Get saathi profile
+  static Future<DocumentSnapshot> getSaathi(String uid) {
+    return _saathis.doc(uid).get();
+  }
+}
+```
+
+### lib/services/village_service.dart
+Always read from `villages` collection, fallback to hardcoded:
+
+```dart
+class VillageService {
+  
+  static List<VillageModel>? _cachedVillages;
+  
+  // Hardcoded fallback — correct coordinates
+  static final List<VillageModel> _fallbackVillages = [
+    VillageModel('Anaval',     'આણવલ',    20.8394, 73.2637),
+    VillageModel('Kos',        'કૉસ',     20.8480, 73.2350),
+    VillageModel('Tarkani',    'તારકણી',  20.8550, 73.2580),
+    VillageModel('Angaldhara', 'અંગળધરા', 20.8180, 73.2280),
+    VillageModel('Dholikuva',  'ઢોળીકૂવા',20.8650, 73.2800),
+    VillageModel('Lakhavadi',  'લખાવડી',  20.8050, 73.2150),
+    VillageModel('Unai',       'ઉનાઈ',    20.8550, 73.2100),
+    VillageModel('Doldha',     'ડોળધા',   20.7950, 73.2600),
+    VillageModel('Kamboya',    'કાંબોયા', 20.8750, 73.2200),
+  ];
+  
+  static Future<List<VillageModel>> getVillages() async {
+    if (_cachedVillages != null) return _cachedVillages!;
+    
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('villages')
+          .where('isActive', isEqualTo: true)
+          .get();
+      
+      if (snapshot.docs.isEmpty) {
+        _cachedVillages = _fallbackVillages;
+        return _fallbackVillages;
+      }
+      
+      _cachedVillages = snapshot.docs.map((doc) {
+        final d = doc.data();
+        return VillageModel(
+          d['name'] ?? '',
+          d['nameGu'] ?? '',
+          (d['lat'] ?? 0).toDouble(),
+          (d['lng'] ?? 0).toDouble(),
+        );
+      }).toList();
+      
+      return _cachedVillages!;
+      
+    } catch (e) {
+      // Fallback if Firestore fails
+      _cachedVillages = _fallbackVillages;
+      return _fallbackVillages;
+    }
+  }
+  
+  // Find nearest village to given coordinates
+  static VillageModel findNearestVillage(
+      double lat, double lng, List<VillageModel> villages) {
+    VillageModel nearest = villages.first;
+    double minDistance = double.infinity;
+    
+    for (final village in villages) {
+      final distance = Geolocator.distanceBetween(
+        lat, lng, village.lat, village.lng,
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearest = village;
+      }
+    }
+    return nearest;
+  }
+}
+```

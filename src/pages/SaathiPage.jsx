@@ -50,7 +50,7 @@ export default function SaathiPage() {
 
   useEffect(() => {
     const unsubs = [
-      onSnapshot(collection(db, 'saathi'), (snapshot) => {
+      onSnapshot(collection(db, 'saathis'), (snapshot) => {
         setDrivers(snapshot.docs.map((docRef) => ({ id: docRef.id, ...docRef.data() })))
       }),
       onSnapshot(collection(db, 'villages'), (snapshot) => {
@@ -79,7 +79,7 @@ export default function SaathiPage() {
   )
 
   const updateStatus = async (driverId, status) => {
-    await updateDoc(doc(db, 'saathi', driverId), { status })
+    await updateDoc(doc(db, 'saathis', driverId), { status })
     setShowSuccessToast(true)
   }
 

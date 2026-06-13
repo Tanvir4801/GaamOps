@@ -45,10 +45,10 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     const unsubs = [
-      onSnapshot(collection(db, 'bookings'), (snapshot) => {
+      onSnapshot(collection(db, 'rides'), (snapshot) => {
         setBookings(snapshot.docs.map((docRef) => ({ id: docRef.id, ...docRef.data() })))
       }),
-      onSnapshot(collection(db, 'saathi'), (snapshot) => {
+      onSnapshot(collection(db, 'saathis'), (snapshot) => {
         setSaathi(snapshot.docs.map((docRef) => ({ id: docRef.id, ...docRef.data() })))
       }),
     ]
@@ -86,18 +86,11 @@ export default function AnalyticsPage() {
   }, [bookings])
 
   const rideSplit = useMemo(() => {
-    const gaamRide = bookings.filter(
-      (booking) => String(booking.type || '').toLowerCase() === 'ride',
-    ).length
-    const gaamHaul = bookings.filter(
-      (booking) => String(booking.type || '').toLowerCase() === 'haul',
-    ).length
-
     return [
-      { name: 'GaamRide', value: gaamRide },
-      { name: 'GaamHaul', value: gaamHaul },
+      { name: 'GaamRide', value: bookings.length },
+      { name: 'GaamHaul', value: saathi.length },
     ]
-  }, [bookings])
+  }, [bookings, saathi])
 
   const registrationTrend = useMemo(() => {
     const counts = {}

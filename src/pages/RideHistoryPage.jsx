@@ -95,7 +95,7 @@ export default function RideHistoryPage() {
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'bookings'), (snap) => {
+    const unsub = onSnapshot(collection(db, 'rides'), (snap) => {
       setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
     })
