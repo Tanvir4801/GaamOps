@@ -7,6 +7,7 @@ import '../../constants/app_strings.dart';
 import '../../models/ride_model.dart';
 import '../../services/ride_service.dart';
 import '../../widgets/loading_overlay.dart';
+import '../../widgets/radar_searching_widget.dart';
 import 'ride_complete_screen.dart';
 import 'emergency_contacts_screen.dart';
 
@@ -85,27 +86,129 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
   }
 
   Future<void> _cancelRide() async {
-    final confirmed = await showDialog<bool>(
+    String? selectedReason;
+    const reasons = [
+      'Waiting too long',
+      'Found another ride',
+      'Saathi not responding',
+      'Change of plans',
+      'Wrong village selected',
+      'Other',
+    ];
+
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('સવારી રદ કરવી? / Cancel Ride?'),
-        content: const Text(
-            'શું તમે ખરેખર સવારી રદ કરવા ઈચ્છો છો?\nAre you sure you want to cancel?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('ના / No'),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, MediaQuery.of(ctx).padding.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2))),
+              ),
+              const SizedBox(height: 16),
+              const Text('Cancel Ride · સવારી રદ કરો',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              const SizedBox(height: 4),
+              const Text('Please tell us why you\'re cancelling',
+                  style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+              const SizedBox(height: 16),
+              ...reasons.map((r) => GestureDetector(
+                    onTap: () => setModalState(() => selectedReason = r),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: selectedReason == r
+                            ? AppColors.bgGreen
+                            : Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selectedReason == r
+                              ? AppColors.primaryGreen
+                              : Colors.grey[200]!,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selectedReason == r
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                            color: selectedReason == r
+                                ? AppColors.primaryGreen
+                                : AppColors.textGrey,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(r,
+                              style: TextStyle(
+                                  fontWeight: selectedReason == r
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: selectedReason == r
+                                      ? AppColors.primaryGreen
+                                      : AppColors.textDark)),
+                        ],
+                      ),
+                    ),
+                  )),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.grey),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        minimumSize: const Size(0, 48),
+                      ),
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Keep Ride',
+                          style: TextStyle(color: AppColors.textDark)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        minimumSize: const Size(0, 48),
+                      ),
+                      onPressed: selectedReason != null
+                          ? () => Navigator.pop(ctx, true)
+                          : null,
+                      child: const Text('Cancel Ride',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('હા / Yes',
-                style: TextStyle(color: AppColors.error)),
-          ),
-        ],
+        ),
       ),
     );
+
     if (confirmed == true && mounted) {
-      await RideService.cancelRide(widget.rideId, 'Cancelled by customer');
+      await RideService.cancelRide(
+          widget.rideId, selectedReason ?? 'Cancelled by customer');
       if (mounted) Navigator.pop(context);
     }
   }
@@ -322,27 +425,14 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                     const SizedBox(height: 16),
 
                     if (isSearching) ...[
-                      const LinearProgressIndicator(
-                        backgroundColor: AppColors.bgGreen,
-                        color: AppColors.primaryGreen,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'સાથી શોધી રહ્યા છીએ...',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textDark),
-                      ),
-                      const Text(
-                        'Searching for Saathi near you',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.textGrey),
-                      ),
-                      const SizedBox(height: 12),
-                      TextButton(
+                      const SizedBox(height: 8),
+                      const RadarSearchingWidget(),
+                      const SizedBox(height: 16),
+                      TextButton.icon(
                         onPressed: _cancelRide,
-                        child: const Text('સવારી રદ કરો / Cancel Ride',
-                            style: TextStyle(color: AppColors.error)),
+                        icon: const Icon(Icons.close, size: 16, color: AppColors.error),
+                        label: const Text('Cancel Ride',
+                            style: TextStyle(color: AppColors.error, fontSize: 13)),
                       ),
                     ] else ...[
                       Row(
