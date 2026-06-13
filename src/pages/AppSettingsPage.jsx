@@ -10,6 +10,7 @@ const DEFAULT = {
   haulCommission: 75,
   serviceZoneSW: { lat: '', lng: '' }, serviceZoneNE: { lat: '', lng: '' },
   maintenanceMode: false, appVersion: '',
+  surgeMorning: 1.0, surgeEvening: 1.0, surgeWeekend: 1.0,
 }
 
 export default function AppSettingsPage() {
@@ -33,6 +34,9 @@ export default function AppSettingsPage() {
       serviceZoneNE: data.serviceZoneNE || { lat: '', lng: '' },
       maintenanceMode: data.maintenanceMode ?? false,
       appVersion: data.appVersion ?? '',
+      surgeMorning: data.surgeMorning ?? 1.0,
+      surgeEvening: data.surgeEvening ?? 1.0,
+      surgeWeekend: data.surgeWeekend ?? 1.0,
     })
   }, [data])
 
@@ -54,6 +58,9 @@ export default function AppSettingsPage() {
         serviceZoneNE: { lat: Number(form.serviceZoneNE.lat), lng: Number(form.serviceZoneNE.lng) },
         maintenanceMode: form.maintenanceMode,
         appVersion: form.appVersion,
+        surgeMorning: Number(form.surgeMorning) || 1.0,
+        surgeEvening: Number(form.surgeEvening) || 1.0,
+        surgeWeekend: Number(form.surgeWeekend) || 1.0,
       }, { merge: true })
       toast.success('Settings saved! App will update automatically.')
     } catch (err) {
@@ -140,6 +147,41 @@ export default function AppSettingsPage() {
             <Input label="Minimum fare ₹" value={form.rideFareMinimum} onChange={(v) => set('rideFareMinimum', v)} />
             <Input label="Maximum fare ₹" value={form.rideFareMaximum} onChange={(v) => set('rideFareMaximum', v)} />
           </Section>
+
+          <hr className="border-gray-100" />
+
+          <div>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">⚡ Surge Pricing</h3>
+            <p className="mb-3 text-xs text-gray-400">Set a fare multiplier for peak hours. Applied on top of the base fare + per-km rate.</p>
+            <div className="space-y-3">
+              {[
+                { key: 'surgeMorning', label: 'Morning Peak (7–9 AM)', default: form.surgeMorning ?? 1.0 },
+                { key: 'surgeEvening', label: 'Evening Peak (5–8 PM)', default: form.surgeEvening ?? 1.0 },
+                { key: 'surgeWeekend', label: 'Weekend / Festival', default: form.surgeWeekend ?? 1.0 },
+              ].map(({ key, label, default: val }) => (
+                <div key={key} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{label}</p>
+                    <p className="text-xs text-gray-400">
+                      {(val === 1.0 || !val) ? 'No surge' : `×${Number(val).toFixed(1)} — fares ${Math.round((val - 1) * 100)}% higher`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">×</span>
+                    <input
+                      type="number"
+                      min="1.0"
+                      max="3.0"
+                      step="0.1"
+                      value={form[key] ?? 1.0}
+                      onChange={(e) => set(key, parseFloat(e.target.value))}
+                      className="w-16 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm font-bold text-orange-600 outline-none focus:ring-2 focus:ring-orange-300"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           <hr className="border-gray-100" />
 

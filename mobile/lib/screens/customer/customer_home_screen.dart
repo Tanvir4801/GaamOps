@@ -14,6 +14,7 @@ import '../../utils/fare_calculator.dart';
 import '../../widgets/village_selector_sheet.dart';
 import '../../widgets/loading_overlay.dart';
 import 'ride_request_screen.dart';
+import 'favourite_routes_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -28,6 +29,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
   VillageModel? _pickupVillage;
   VillageModel? _destinationVillage;
   List<SaathiModel> _availableSaathis = [];
+  List<FavouriteRoute> _favouriteRoutes = [];
   Position? _myPosition;
   bool _loading = false;
   bool _searching = false;
@@ -56,15 +58,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
       SettingsService.getSettings(),
       _loadUserName(),
       _loadLocation(),
+      FavouriteRoutesScreen.loadRoutes(),
     ]);
 
     final villages = results[0] as List<VillageModel>;
     final settings = results[1] as dynamic;
+    final favRoutes = results[4] as List<FavouriteRoute>;
 
     if (mounted) {
       setState(() {
         _villages = villages;
         _settings = settings.toMap();
+        _favouriteRoutes = favRoutes;
         _loading = false;
       });
     }
@@ -182,6 +187,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
             children: [
               _buildLocationCard(),
               const SizedBox(height: 12),
+              if (_favouriteRoutes.isNotEmpty) _buildFavouriteChips(),
+              if (_favouriteRoutes.isNotEmpty) const SizedBox(height: 12),
               _buildDestinationCard(),
               if (_pickupVillage != null && _destinationVillage != null) ...[
                 const SizedBox(height: 12),
@@ -223,6 +230,96 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFavouriteChips() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.star_rounded, size: 14, color: AppColors.primaryGreen),
+            const SizedBox(width: 4),
+            const Text(
+              'Quick Routes · ઝડપી માર્ગ',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textGrey),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const FavouriteRoutesScreen()),
+              ),
+              child: const Text(
+                'Manage',
+                style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.primaryGreen,
+                    fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _favouriteRoutes.map((r) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () {
+                    final pickup = _villages.where(
+                        (v) => v.name == r.pickupVillage).firstOrNull;
+                    final dest = _villages.where(
+                        (v) => v.name == r.destinationVillage).firstOrNull;
+                    if (pickup != null && dest != null) {
+                      setState(() {
+                        _pickupVillage = pickup;
+                        _destinationVillage = dest;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.primaryGreen),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withAlpha(5),
+                            blurRadius: 4)
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            size: 12, color: AppColors.primaryGreen),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${r.pickupVillage} → ${r.destinationVillage}',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 

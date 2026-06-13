@@ -8,6 +8,7 @@ import '../../models/ride_model.dart';
 import '../../services/ride_service.dart';
 import '../../widgets/loading_overlay.dart';
 import 'ride_complete_screen.dart';
+import 'emergency_contacts_screen.dart';
 
 class RideTrackingScreen extends StatefulWidget {
   final String rideId;
@@ -116,8 +117,96 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
   }
 
   void _showSOS() async {
-    final uri = Uri(scheme: 'tel', path: '112');
-    if (await canLaunchUrl(uri)) launchUrl(uri);
+    final contacts = await EmergencyContactsScreen.getContacts();
+
+    if (!mounted) return;
+    if (contacts.isEmpty) {
+      final uri = Uri(scheme: 'tel', path: '112');
+      if (await canLaunchUrl(uri)) launchUrl(uri);
+      return;
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.emergency, color: AppColors.sosRed, size: 20),
+                SizedBox(width: 8),
+                Text('SOS — Call for Help',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...contacts.map((c) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        shape: BoxShape.circle),
+                    child:
+                        const Icon(Icons.person, color: AppColors.sosRed, size: 20),
+                  ),
+                  title: Text(c.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(c.phone,
+                      style: const TextStyle(color: AppColors.textGrey)),
+                  trailing: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.sosRed,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8))),
+                    icon: const Icon(Icons.call, size: 14, color: Colors.white),
+                    label: const Text('Call',
+                        style: TextStyle(color: Colors.white, fontSize: 13)),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final uri = Uri(scheme: 'tel', path: c.phone);
+                      if (await canLaunchUrl(uri)) launchUrl(uri);
+                    },
+                  ),
+                )),
+            const Divider(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                    color: Colors.orange[50], shape: BoxShape.circle),
+                child: const Icon(Icons.local_police,
+                    color: Colors.orange, size: 20),
+              ),
+              title: const Text('Emergency Services (112)',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Police, Fire, Ambulance'),
+              trailing: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8))),
+                icon: const Icon(Icons.call, size: 14, color: Colors.white),
+                label: const Text('Call 112',
+                    style: TextStyle(color: Colors.white, fontSize: 13)),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final uri = Uri(scheme: 'tel', path: '112');
+                  if (await canLaunchUrl(uri)) launchUrl(uri);
+                },
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 4),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
