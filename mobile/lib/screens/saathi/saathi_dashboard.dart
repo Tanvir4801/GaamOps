@@ -8,7 +8,6 @@ import '../../models/saathi_model.dart';
 import '../../models/ride_model.dart';
 import '../../services/saathi_service.dart';
 import '../../services/ride_service.dart';
-import '../../widgets/earnings_card.dart';
 import '../../widgets/sos_button.dart';
 import 'saathi_ride_screen.dart';
 
@@ -19,7 +18,8 @@ class SaathiDashboard extends StatefulWidget {
   State<SaathiDashboard> createState() => _SaathiDashboardState();
 }
 
-class _SaathiDashboardState extends State<SaathiDashboard> {
+class _SaathiDashboardState extends State<SaathiDashboard>
+    with SingleTickerProviderStateMixin {
   bool _isOnline = false;
   bool _toggling = false;
   SaathiModel? _saathi;
@@ -31,12 +31,18 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
   StreamSubscription? _locationSub;
   StreamSubscription? _saathiSub;
   bool _popupShown = false;
+  late AnimationController _onlineCtrl;
+  late Animation<double> _onlineAnim;
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   @override
   void initState() {
     super.initState();
+    _onlineCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 800))
+      ..repeat(reverse: true);
+    _onlineAnim = Tween<double>(begin: 0.3, end: 1.0).animate(_onlineCtrl);
     _init();
   }
 
@@ -47,13 +53,15 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
         setState(() => _saathi = SaathiModel.fromFirestore(snap));
       }
     });
-    final earnings = await RideService.getSaathiEarnings(_uid!);
-    if (mounted) {
-      setState(() {
-        _todayEarnings = (earnings['today'] ?? 0).toDouble();
-        _todayRides = (earnings['todayRides'] ?? 0).toInt();
-      });
-    }
+    try {
+      final earnings = await RideService.getSaathiEarnings(_uid!);
+      if (mounted) {
+        setState(() {
+          _todayEarnings = (earnings['today'] ?? 0).toDouble();
+          _todayRides = (earnings['todayRides'] ?? 0).toInt();
+        });
+      }
+    } catch (_) {}
     _listenForRides();
   }
 
@@ -99,16 +107,21 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
       if (_isOnline) {
         await SaathiService.goOffline(_uid!);
         _locationSub?.cancel();
-        setState(() {
-          _isOnline = false;
-        });
+        setState(() => _isOnline = false);
       } else {
         await SaathiService.goOnline(_uid!);
         setState(() => _isOnline = true);
         _startLocationUpdates();
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}'),
+              backgroundColor: AppColors.error),
+        );
+      }
     } finally {
-      setState(() => _toggling = false);
+      if (mounted) setState(() => _toggling = false);
     }
   }
 
@@ -144,15 +157,12 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
     );
     if (mounted) {
       setState(() => _activeRide = ride);
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => SaathiRideScreen(
-            ride: ride,
-            onComplete: () => setState(() => _activeRide = null),
-          ),
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => SaathiRideScreen(
+          ride: ride,
+          onComplete: () => setState(() => _activeRide = null),
         ),
-      );
+      ));
     }
   }
 
@@ -161,84 +171,130 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
     _rideSub?.cancel();
     _locationSub?.cancel();
     _saathiSub?.cancel();
+    _onlineCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _saathi?.name ?? 'Saathi Dashboard',
-              style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16),
-            ),
-            Text(
-              _isOnline ? AppStrings.onlineGu : AppStrings.offlineGu,
-              style: TextStyle(
-                fontSize: 11,
-                color: _isOnline ? AppColors.success : AppColors.textGrey,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          if (_myPosition != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: SosButton(
-                lat: _myPosition?.latitude,
-                lng: _myPosition?.longitude,
-              ),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            color: Colors.white,
-            child: Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: _isOnline ? AppColors.success : Colors.grey.shade400,
-                    shape: BoxShape.circle,
-                    boxShadow: _isOnline
-                        ? [
-                            BoxShadow(
-                              color: AppColors.success.withOpacity(0.4),
-                              blurRadius: 8,
-                              spreadRadius: 2,
-                            )
-                          ]
-                        : [],
-                  ),
+      backgroundColor: const Color(0xFFF5F5F5),
+      body: CustomScrollView(slivers: [
+        // Header app bar
+        SliverAppBar(
+          expandedHeight: 130,
+          pinned: true,
+          backgroundColor: AppColors.primaryGreen,
+          elevation: 0,
+          flexibleSpace: FlexibleSpaceBar(
+            background: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 12, 0),
+                  child: Row(children: [
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _saathi?.name ?? 'Gaam Saathi',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold,
+                              color: Colors.white),
+                        ),
+                        Row(children: [
+                          if (_isOnline)
+                            FadeTransition(
+                              opacity: _onlineAnim,
+                              child: Container(
+                                width: 8, height: 8,
+                                decoration: const BoxDecoration(
+                                    color: Color(0xFF69F0AE),
+                                    shape: BoxShape.circle),
+                              ),
+                            )
+                          else
+                            Container(
+                              width: 8, height: 8,
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(100),
+                                  shape: BoxShape.circle),
+                            ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _isOnline
+                                ? AppStrings.onlineGu : AppStrings.offlineGu,
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: _isOnline
+                                    ? const Color(0xFF69F0AE) : Colors.white60),
+                          ),
+                        ]),
+                      ],
+                    )),
+                    // SOS button
+                    if (_myPosition != null)
+                      SosButton(
+                        lat: _myPosition?.latitude,
+                        lng: _myPosition?.longitude,
+                      ),
+                    const SizedBox(width: 8),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(children: [
+              // Online toggle card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8),
+                  ],
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(
+                      color: _isOnline
+                          ? AppColors.bgGreen : Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _isOnline ? Icons.wifi : Icons.wifi_off,
+                      color: _isOnline
+                          ? AppColors.primaryGreen : AppColors.textGrey,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _isOnline ? 'Online — Ready for Rides' : 'Offline',
+                        _isOnline
+                            ? 'Online — Ready for Rides'
+                            : 'Offline',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: _isOnline
-                              ? AppColors.success
-                              : AppColors.textGrey,
-                        ),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: _isOnline
+                                ? AppColors.primaryGreen : AppColors.textGrey),
                       ),
                       Text(
                         _isOnline
@@ -248,120 +304,168 @@ class _SaathiDashboardState extends State<SaathiDashboard> {
                             fontSize: 11, color: AppColors.textGrey),
                       ),
                     ],
-                  ),
+                  )),
+                  _toggling
+                      ? const SizedBox(
+                          width: 36, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5))
+                      : Switch.adaptive(
+                          value: _isOnline,
+                          onChanged: (_) => _toggleOnline(),
+                          activeColor: AppColors.primaryGreen,
+                        ),
+                ]),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Earnings row
+              Row(children: [
+                _earningsCard('આજની કમાણી',
+                    '₹${_todayEarnings.toStringAsFixed(0)}',
+                    '$_todayRides rides today',
+                    AppColors.primaryGreen),
+                const SizedBox(width: 12),
+                _earningsCard('Rating',
+                    '${(_saathi?.rating ?? 5.0).toStringAsFixed(1)} ★',
+                    'Saathi score',
+                    AppColors.warning),
+              ]),
+
+              const SizedBox(height: 16),
+
+              // Vehicle card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8),
+                  ],
                 ),
-                _toggling
-                    ? const SizedBox(
-                        width: 36,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Switch.adaptive(
-                        value: _isOnline,
-                        onChanged: (_) => _toggleOnline(),
-                        activeColor: AppColors.primaryGreen,
-                      ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: EarningsCard(
-                          label: "Today's Earnings",
-                          amount: _todayEarnings,
-                          rides: _todayRides,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: EarningsCard(
-                          label: 'Rating',
-                          amount: _saathi?.rating ?? 5.0,
-                          color: AppColors.warning,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
+                child: Row(children: [
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    width: 48, height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.bgGreen,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Your Vehicle',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14)),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            const Icon(Icons.electric_rickshaw,
-                                color: AppColors.primaryGreen, size: 32),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(_saathi?.vehicleType ?? '—',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
-                                Text(_saathi?.vehicleNumber ?? '—',
-                                    style: const TextStyle(
-                                        color: AppColors.textGrey,
-                                        fontSize: 12)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
+                    child: const Icon(Icons.electric_rickshaw,
+                        color: AppColors.primaryGreen, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Your Vehicle',
+                          style: TextStyle(
+                              fontSize: 11, color: AppColors.textGrey)),
+                      Text(_saathi?.vehicleType ?? '—',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(_saathi?.vehicleNumber ?? '—',
+                          style: const TextStyle(
+                              color: AppColors.textGrey, fontSize: 13)),
+                    ],
+                  )),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _saathi?.isBlocked == true
+                          ? Colors.red.shade50 : AppColors.bgGreen,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _saathi?.isBlocked == true
+                          ? 'Blocked' : '✓ Active',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold,
+                          color: _saathi?.isBlocked == true
+                              ? Colors.red : AppColors.primaryGreen),
                     ),
                   ),
-                  if (!_isOnline) ...[
-                    const SizedBox(height: 20),
-                    Container(
+                ]),
+              ),
+
+              // Offline prompt
+              if (!_isOnline) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgGreen,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: AppColors.primaryGreen.withAlpha(80)),
+                  ),
+                  child: Column(children: [
+                    const Icon(Icons.power_settings_new,
+                        color: AppColors.primaryGreen, size: 40),
+                    const SizedBox(height: 10),
+                    const Text('ઓનલાઇન થઈ સવારી સ્વીકારો',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: AppColors.primaryGreen)),
+                    const SizedBox(height: 4),
+                    const Text('Go online to start accepting rides',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textGrey)),
+                    const SizedBox(height: 14),
+                    SizedBox(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppColors.bgGreen,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: AppColors.primaryGreen.withOpacity(0.3)),
-                      ),
-                      child: const Column(
-                        children: [
-                          Icon(Icons.power_settings_new,
-                              color: AppColors.primaryGreen, size: 36),
-                          SizedBox(height: 8),
-                          Text(
-                            'ઓનલાઇન થઈ સવારી સ્વીકારો',
+                      height: 44,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryGreen,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        onPressed: _toggling ? null : _toggleOnline,
+                        child: const Text('Go Online',
                             style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryGreen),
-                          ),
-                          Text(
-                            'Go online to start accepting rides',
-                            style: TextStyle(
-                                fontSize: 12, color: AppColors.textGrey),
-                          ),
-                        ],
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ),
+                  ]),
+                ),
+              ],
+
+              const SizedBox(height: 24),
+            ]),
           ),
-        ],
+        ),
+      ]),
+    );
+  }
+
+  Widget _earningsCard(
+      String label, String amount, String sub, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8),
+          ],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: const TextStyle(fontSize: 11, color: AppColors.textGrey)),
+          const SizedBox(height: 4),
+          Text(amount,
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+          Text(sub,
+              style: const TextStyle(fontSize: 10, color: AppColors.textGrey)),
+        ]),
       ),
     );
   }
@@ -418,151 +522,129 @@ class _RideRequestModalState extends State<_RideRequestModal> {
   @override
   Widget build(BuildContext context) {
     final ride = widget.ride;
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: _timerValue,
-                minHeight: 5,
-                backgroundColor: Colors.grey.shade200,
-                valueColor: AlwaysStoppedAnimation<Color>(_timerColor),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Timer bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _timerValue,
+              minHeight: 6,
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation<Color>(_timerColor),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$_seconds સેકન્ડ / seconds',
+            style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+          ),
+
+          const SizedBox(height: 14),
+          const Text('🛵 નવી સવારી વિનંતી!',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text('New Ride Request',
+              style: TextStyle(color: AppColors.textGrey)),
+
+          const SizedBox(height: 18),
+
+          // Route info
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.bgGreen,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(children: [
+              Row(children: [
+                const Icon(Icons.circle, color: AppColors.primaryGreen, size: 12),
+                const SizedBox(width: 8),
+                Text(ride.pickupVillage,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ]),
+              Container(
+                  margin: const EdgeInsets.only(left: 5),
+                  height: 18, width: 2, color: Colors.grey.shade300),
+              Row(children: [
+                const Icon(Icons.location_on, color: AppColors.primaryOrange, size: 14),
+                const SizedBox(width: 8),
+                Text(ride.destinationVillage,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ]),
+            ]),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Ride details chips
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            _infoChip('📍', '${((ride.distanceMeters ?? 0) / 1000).toStringAsFixed(1)} km'),
+            Container(width: 1, height: 20, color: Colors.grey.shade300),
+            _infoChip('💰', '₹${ride.fare.toStringAsFixed(0)}', bold: true),
+            Container(width: 1, height: 20, color: Colors.grey.shade300),
+            _infoChip('👤', ride.customerName),
+          ]),
+
+          const SizedBox(height: 18),
+
+          // Action buttons
+          Row(children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onReject,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('નામંજૂર / Reject',
+                    style: TextStyle(fontSize: 14)),
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              '$_seconds સેકન્ડ / seconds',
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textGrey),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              '🛵 નવી સવારી વિનંતી!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const Text(
-              'New Ride Request',
-              style: TextStyle(color: AppColors.textGrey),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.bgGreen,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.circle,
-                          color: AppColors.primaryGreen, size: 12),
-                      const SizedBox(width: 8),
-                      Text(
-                        ride.pickupVillage,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    margin: const EdgeInsets.only(left: 5),
-                    height: 18,
-                    width: 2,
-                    color: Colors.grey.shade300,
-                  ),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on,
-                          color: AppColors.primaryOrange, size: 14),
-                      const SizedBox(width: 8),
-                      Text(
-                        ride.destinationVillage,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                ],
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: ElevatedButton(
+                onPressed: widget.onAccept,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryGreen,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                child: const Text('✓ સ્વીકારો / Accept',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.bold,
+                        color: Colors.white)),
               ),
             ),
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Text(
-                  '📍 ${((ride.distanceMeters ?? 0) / 1000).toStringAsFixed(1)} km',
-                  style: const TextStyle(fontSize: 14),
-                ),
-                Container(
-                    width: 1, height: 20, color: Colors.grey.shade300),
-                Text(
-                  '💰 ₹${ride.fare.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryGreen),
-                ),
-                Container(
-                    width: 1, height: 20, color: Colors.grey.shade300),
-                Text(
-                  '👤 ${ride.customerName}',
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: widget.onReject,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('નામંજૂર / Reject',
-                        style: TextStyle(fontSize: 14)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: widget.onAccept,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryGreen,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'સ્વીકારો / Accept',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom),
-          ],
-        ),
+          ]),
+
+          SizedBox(height: MediaQuery.of(context).padding.bottom),
+        ]),
       ),
+    );
+  }
+
+  Widget _infoChip(String emoji, String text, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Text('$emoji $text',
+          style: TextStyle(
+              fontSize: 14,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+              color: bold ? AppColors.primaryGreen : AppColors.textDark)),
     );
   }
 }

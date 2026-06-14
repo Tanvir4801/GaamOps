@@ -2,3 +2,4 @@
 - [Firestore collection names](firestore-collections.md) — canonical names that must be used everywhere; bugs were fixed from wrong names
 - [Promo codes](promo-codes.md) — hardcoded in ride_request_screen: GAAM10=₹10, FIRSTRIDE=₹20, MAHUVA5=₹5; FavouriteRoutesScreen.saveRoute() is called from ride_request on confirm
 - [Flutter animation pattern](flutter-animations.md) — all premium animations use AnimationController in initState + dispose; radar uses CustomPainter with SweepGradient; shimmer uses LinearGradient with animated position
+- [GaamRide model APIs](gaamride-model-apis.md) — SaathiModel has no isVerified; use isBlocked. SettingsService.getSettings() returns AppSettingsModel (call .toMap() for FareCalculator). Future.wait with mixed return types needs sequential awaits to avoid cast issues.

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../constants/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
-import '../../services/ride_service.dart';
 import '../welcome_screen.dart';
 import 'ride_history_screen.dart';
 import 'favourite_routes_screen.dart';
@@ -21,7 +21,9 @@ class CustomerProfileScreen extends StatefulWidget {
 class _CustomerProfileScreenState extends State<CustomerProfileScreen>
     with SingleTickerProviderStateMixin {
   UserModel? _user;
-  bool _loading = true;
+  bool _isLoading = true;
+  bool _loadError = false;
+  bool _historyError = false;
   int _totalRides = 0;
   double _totalSpent = 0;
   late AnimationController _headerCtrl;
@@ -43,25 +45,52 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen>
 
   Future<void> _load() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final results = await Future.wait([
-      AuthService.getUser(uid),
-      RideService.getCustomerHistory(uid),
-    ]);
-    final user = results[0] as UserModel?;
-    final rideDocs = results[1] as List;
-    final totalSpent = rideDocs.fold<double>(
-      0,
-      (sum, doc) => sum + ((doc.data() as Map)['fare'] ?? 0).toDouble(),
-    );
-    if (mounted) {
-      setState(() {
-        _user = user;
-        _totalRides = rideDocs.length;
-        _totalSpent = totalSpent;
-        _loading = false;
-      });
-      _headerCtrl.forward();
+    if (uid == null) {
+      if (mounted) setState(() { _isLoading = false; _loadError = true; });
+      return;
+    }
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users').doc(uid).get();
+
+      if (!mounted) return;
+
+      if (userDoc.exists) {
+        setState(() {
+          _user = UserModel.fromFirestore(userDoc);
+        });
+        _headerCtrl.forward();
+      } else {
+        setState(() { _loadError = true; });
+      }
+
+      // Load history separately — don't block profile if this fails
+      try {
+        final rideDocs = await FirebaseFirestore.instance
+            .collection('rides')
+            .where('customerId', isEqualTo: uid)
+            .orderBy('createdAt', descending: true)
+            .limit(20)
+            .get();
+
+        if (!mounted) return;
+        setState(() {
+          _totalRides = rideDocs.docs.length;
+          _totalSpent = rideDocs.docs.fold(0.0,
+            (sum, doc) => sum + ((doc.data()['fare'] ?? 0).toDouble()));
+        });
+      } catch (historyError) {
+        debugPrint('History load error: $historyError');
+        if (mounted) setState(() { _historyError = true; });
+      }
+
+    } catch (e) {
+      debugPrint('Profile load error: $e');
+      if (!mounted) return;
+      setState(() { _loadError = true; });
+    } finally {
+      if (mounted) setState(() { _isLoading = false; });
     }
   }
 
@@ -69,7 +98,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Sign Out?',
             style: TextStyle(fontWeight: FontWeight.bold)),
         content: const Text('You will need to sign in again to book rides.'),
@@ -78,7 +107,10 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen>
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
           ),
@@ -98,7 +130,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen>
   }
 
   void _copyReferral() {
-    final code = 'GAAM${(_user?.name ?? 'USER').toUpperCase().replaceAll(' ', '').substring(0, 4)}';
+    final name = _user?.name ?? 'USER';
+    final safe = name.toUpperCase().replaceAll(' ', '');
+    final code = 'GAAM${safe.length >= 4 ? safe.substring(0, 4) : safe}';
     Clipboard.setData(ClipboardData(text: code));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -115,414 +149,377 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen>
     super.dispose();
   }
 
+  Widget _loadingScreen() => Scaffold(
+    appBar: AppBar(
+      title: const Text('પ્રોફાઇલ / Profile'),
+      backgroundColor: Colors.white,
+      foregroundColor: AppColors.textDark,
+      elevation: 0.5,
+    ),
+    body: const Center(child: CircularProgressIndicator(color: AppColors.primaryGreen)),
+  );
+
+  Widget _errorScreen() => Scaffold(
+    appBar: AppBar(
+      title: const Text('પ્રોફાઇલ / Profile'),
+      backgroundColor: Colors.white,
+      foregroundColor: AppColors.textDark,
+      elevation: 0.5,
+    ),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 56, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('પ્રોફાઇલ લોડ ન થઈ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            const Text('Could not load profile. Please retry.',
+                style: TextStyle(color: AppColors.textGrey, fontSize: 13),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              ),
+              icon: const Icon(Icons.refresh, color: Colors.white),
+              label: const Text('ફરી પ્રયાસ / Retry',
+                  style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                setState(() { _isLoading = true; _loadError = false; });
+                _load();
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryGreen))
-          : _user == null
-              ? const Center(child: Text('Unable to load profile'))
-              : CustomScrollView(
-                  slivers: [
-                    SliverToBoxAdapter(child: _buildHeader()),
-                    SliverToBoxAdapter(child: _buildStats()),
-                    SliverToBoxAdapter(child: _buildMenu()),
-                    SliverToBoxAdapter(child: _buildReferral()),
-                    SliverToBoxAdapter(child: _buildLogout()),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
-                ),
-    );
-  }
+    if (_isLoading) return _loadingScreen();
+    if (_loadError || _user == null) return _errorScreen();
 
-  Widget _buildHeader() {
-    final initials = _user!.name.isNotEmpty
-        ? _user!.name.trim().split(' ').map((w) => w[0]).take(2).join()
-        : 'U';
-    return FadeTransition(
-      opacity: _headerFade,
-      child: SlideTransition(
-        position: _headerSlide,
-        child: Container(
-          padding: EdgeInsets.fromLTRB(
-              20, MediaQuery.of(context).padding.top + 20, 20, 28),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.primaryGreen, Color(0xFF0E7C5B)],
-            ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(28),
-              bottomRight: Radius.circular(28),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
-                  color: Colors.white.withAlpha(30),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 200,
+            pinned: true,
+            backgroundColor: AppColors.primaryGreen,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                 ),
-                child: Center(
-                  child: Text(
-                    initials.toUpperCase(),
-                    style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
+                child: SafeArea(
+                  child: FadeTransition(
+                    opacity: _headerFade,
+                    child: SlideTransition(
+                      position: _headerSlide,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 16),
+                          Container(
+                            width: 80, height: 80,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withAlpha(50),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: Center(
+                              child: Text(
+                                _user!.name.isNotEmpty
+                                    ? _user!.name[0].toUpperCase() : 'U',
+                                style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(_user!.name, style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                          Text('+91 ${_user!.phone}',
+                              style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withAlpha(50),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text('📍 ${_user!.village}',
+                                style: const TextStyle(fontSize: 13, color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _user!.name,
-                      style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '+91 ${_user!.phone}',
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on, color: Colors.white60, size: 12),
-                        const SizedBox(width: 3),
-                        Text(
-                          _user!.village,
-                          style: const TextStyle(color: Colors.white60, fontSize: 12),
-                        ),
-                      ],
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Stats row
+                  Row(children: [
+                    _statCard('કુલ સવારી', '$_totalRides', '🛵'),
+                    const SizedBox(width: 10),
+                    _statCard('ખર્ચ', '₹${_totalSpent.toStringAsFixed(0)}', '💰'),
+                    const SizedBox(width: 10),
+                    _statCard('ગામ', _user!.village, '🏘️'),
+                  ]),
+
+                  if (_historyError) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.info_outline, color: Colors.orange, size: 16),
+                        const SizedBox(width: 8),
+                        const Expanded(child: Text(
+                          'Ride history requires Firestore index. Stats may not be accurate.',
+                          style: TextStyle(fontSize: 11, color: Colors.orange),
+                        )),
+                      ]),
                     ),
                   ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildStats() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
-        children: [
-          _StatBox(
-              label: 'Total Rides', value: '$_totalRides', icon: Icons.route),
-          const SizedBox(width: 12),
-          _StatBox(
-              label: 'Total Spent',
-              value: '₹${_totalSpent.toStringAsFixed(0)}',
-              icon: Icons.account_balance_wallet_outlined),
+                  const SizedBox(height: 16),
+
+                  // Account section
+                  _menuSection('Account', [
+                    _menuItem(Icons.history, 'Ride History', () =>
+                        Navigator.push(context, _slide(const RideHistoryScreen()))),
+                    _menuItem(Icons.account_balance_wallet_outlined,
+                        'GaamCash Wallet', () =>
+                            Navigator.push(context, _slide(const GaamWalletScreen()))),
+                    _menuItem(Icons.star_rounded, 'Favourite Routes', () =>
+                        Navigator.push(context, _slide(const FavouriteRoutesScreen()))),
+                    _menuItem(Icons.emergency_outlined, 'Emergency Contacts', () =>
+                        Navigator.push(context, _slide(const EmergencyContactsScreen()))),
+                  ]),
+
+                  const SizedBox(height: 12),
+
+                  // Referral card
+                  _buildReferral(),
+
+                  const SizedBox(height: 12),
+
+                  _menuSection('Support', [
+                    _menuItem(Icons.help_outline, 'Help & Support', () {}),
+                    _menuItem(Icons.info_outline, 'About GaamRide', () {}),
+                  ]),
+
+                  const SizedBox(height: 16),
+
+                  // Logout
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.logout, color: Colors.red),
+                      label: const Text('Logout',
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.red.shade200),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: _logout,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                  const Text('GaamRide v1.0.0 · Mahuva Taluka',
+                      style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMenu() {
-    final items = [
-      (Icons.history_rounded, 'Ride History', 'View all your past rides',
-          AppColors.primaryGreen, () => Navigator.push(context,
-              _slide(const RideHistoryScreen()))),
-      (Icons.account_balance_wallet_outlined, 'GaamCash Wallet',
-          'Cashback & rewards balance', Colors.amber, () => Navigator.push(context,
-              _slide(const GaamWalletScreen()))),
-      (Icons.star_rounded, 'Favourite Routes', 'Quick access to saved routes',
-          Colors.orange, () => Navigator.push(context,
-              _slide(const FavouriteRoutesScreen()))),
-      (Icons.emergency_outlined, 'Emergency Contacts', 'Contacts for SOS alerts',
-          Colors.red, () => Navigator.push(context,
-              _slide(const EmergencyContactsScreen()))),
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withAlpha(6), blurRadius: 10)
-          ],
-        ),
-        child: Column(
-          children: items.asMap().entries.map((entry) {
-            final i = entry.key;
-            final item = entry.value;
-            return _MenuItem(
-              icon: item.$1,
-              title: item.$2,
-              subtitle: item.$3,
-              iconColor: item.$4,
-              onTap: item.$5,
-              showDivider: i < items.length - 1,
-              index: i,
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReferral() {
-    final code = 'GAAM${(_user?.name ?? 'USER').toUpperCase().replaceAll(' ', '').substring(0, 4)}';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFFF8E1), Color(0xFFFFF3CD)],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.amber.withAlpha(80)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.card_giftcard, color: Colors.amber, size: 32),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Refer & Earn ₹20',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
-                  const Text('Share your code. Get ₹20 GaamCash per friend',
-                      style: TextStyle(fontSize: 11, color: Colors.brown)),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: _copyReferral,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            code,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'monospace',
-                                color: Colors.amber,
-                                fontSize: 14,
-                                letterSpacing: 2),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.copy, size: 14, color: Colors.amber),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogout() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.error),
-          minimumSize: const Size(double.infinity, 50),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        onPressed: _logout,
-        icon: const Icon(Icons.logout, color: AppColors.error, size: 18),
-        label: const Text('Sign Out',
-            style: TextStyle(
-                color: AppColors.error, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  PageRouteBuilder _slide(Widget page) => PageRouteBuilder(
-        pageBuilder: (_, animation, __) => page,
-        transitionsBuilder: (_, animation, __, child) => SlideTransition(
-          position: Tween<Offset>(
-                  begin: const Offset(1, 0), end: Offset.zero)
-              .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-          child: child,
-        ),
-        transitionDuration: const Duration(milliseconds: 350),
-      );
-}
-
-class _StatBox extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _StatBox({required this.label, required this.value, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _statCard(String label, String value, String emoji) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
-            BoxShadow(color: Colors.black.withAlpha(6), blurRadius: 8)
+            BoxShadow(
+                color: Colors.black.withAlpha(13), blurRadius: 8)
           ],
         ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.bgGreen,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: AppColors.primaryGreen, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 18)),
-                Text(label,
-                    style: const TextStyle(
-                        color: AppColors.textGrey, fontSize: 11)),
-              ],
-            ),
-          ],
-        ),
+        child: Column(children: [
+          Text(emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(height: 4),
+          Text(value,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: AppColors.textGrey),
+              textAlign: TextAlign.center),
+        ]),
       ),
     );
   }
+
+  Widget _menuSection(String title, List<Widget> items) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(title,
+              style: const TextStyle(
+                  fontSize: 11, color: AppColors.textGrey,
+                  fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+        ),
+        ...items,
+      ]),
+    );
+  }
+
+  Widget _menuItem(IconData icon, String label, VoidCallback onTap) {
+    return _AnimatedMenuItem(icon: icon, label: label, onTap: onTap);
+  }
+
+  Widget _buildReferral() {
+    final name = _user?.name ?? 'USER';
+    final safe = name.toUpperCase().replaceAll(' ', '');
+    final code = 'GAAM${safe.length >= 4 ? safe.substring(0, 4) : safe}';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF8E1), Color(0xFFFFF3CD)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withAlpha(80)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.card_giftcard, color: Colors.amber, size: 32),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Refer & Earn ₹20',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const Text('Share your code. Get ₹20 GaamCash per friend',
+              style: TextStyle(fontSize: 11, color: Colors.brown)),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _copyReferral,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(code, style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.amber,
+                    fontSize: 14,
+                    letterSpacing: 2)),
+                const SizedBox(width: 8),
+                const Icon(Icons.copy, size: 14, color: Colors.amber),
+              ]),
+            ),
+          ),
+        ])),
+      ]),
+    );
+  }
+
+  PageRouteBuilder _slide(Widget page) => PageRouteBuilder(
+    pageBuilder: (_, animation, __) => page,
+    transitionsBuilder: (_, animation, __, child) => SlideTransition(
+      position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+          .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+      child: child,
+    ),
+    transitionDuration: const Duration(milliseconds: 350),
+  );
 }
 
-class _MenuItem extends StatefulWidget {
+class _AnimatedMenuItem extends StatefulWidget {
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color iconColor;
+  final String label;
   final VoidCallback onTap;
-  final bool showDivider;
-  final int index;
 
-  const _MenuItem({
+  const _AnimatedMenuItem({
     required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.iconColor,
+    required this.label,
     required this.onTap,
-    required this.showDivider,
-    required this.index,
   });
 
   @override
-  State<_MenuItem> createState() => _MenuItemState();
+  State<_AnimatedMenuItem> createState() => _AnimatedMenuItemState();
 }
 
-class _MenuItemState extends State<_MenuItem>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<Offset> _slide;
-  late Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 400 + widget.index * 80),
-    );
-    _slide = Tween<Offset>(begin: const Offset(0.3, 0), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    _fade = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    Future.delayed(Duration(milliseconds: 100 + widget.index * 80), () {
-      if (mounted) _ctrl.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+class _AnimatedMenuItemState extends State<_AnimatedMenuItem> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: Column(
-          children: [
-            InkWell(
-              onTap: widget.onTap,
-              borderRadius: widget.showDivider
-                  ? BorderRadius.zero
-                  : const BorderRadius.only(
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                    ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: widget.iconColor.withAlpha(20),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child:
-                          Icon(widget.icon, color: widget.iconColor, size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.title,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 14)),
-                          Text(widget.subtitle,
-                              style: const TextStyle(
-                                  color: AppColors.textGrey, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right,
-                        color: AppColors.textGrey, size: 20),
-                  ],
-                ),
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) { setState(() => _pressed = false); widget.onTap(); },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        color: _pressed ? AppColors.bgGreen : Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.bgGreen,
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Icon(widget.icon, color: AppColors.primaryGreen, size: 18),
             ),
-            if (widget.showDivider)
-              const Divider(height: 1, indent: 56, endIndent: 16),
-          ],
+            const SizedBox(width: 14),
+            Expanded(child: Text(widget.label,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
+            const Icon(Icons.chevron_right, color: AppColors.textGrey, size: 20),
+          ]),
         ),
       ),
     );

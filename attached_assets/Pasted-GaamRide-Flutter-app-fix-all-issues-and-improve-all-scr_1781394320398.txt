@@ -1,0 +1,1432 @@
+GaamRide Flutter app — fix all issues and improve all screens UI.
+
+=== ISSUE 1: PROFILE SCREEN STUCK ON LOADING ===
+
+The profile screen loads forever. Fix this:
+
+In customer/customer_profile_screen.dart,
+the _load() function calls RideService.getCustomerHistory(uid)
+which requires a Firestore composite index.
+
+Fix _load() to handle errors gracefully:
+
+```dart
+Future<void> _load() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+
+  try {
+    // Load user and history in parallel but catch separately
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users').doc(uid).get();
+
+    if (!mounted) return;
+
+    if (userDoc.exists) {
+      setState(() {
+        _user = UserModel.fromFirestore(userDoc);
+      });
+    }
+
+    // Load history separately — don't block profile if this fails
+    try {
+      final rideDocs = await FirebaseFirestore.instance
+          .collection('rides')
+          .where('customerId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(10)
+          .get();
+
+      if (!mounted) return;
+      setState(() {
+        _rides = rideDocs.docs;
+        _totalSpent = _rides.fold(0.0,
+          (sum, doc) => sum + ((doc.data()['fare'] ?? 0).toDouble()));
+      });
+    } catch (historyError) {
+      // History failed (maybe index not created yet) — show profile anyway
+      debugPrint('History load error: $historyError');
+      // Show message to create index
+      setState(() { _historyError = true; });
+    }
+
+  } catch (e) {
+    debugPrint('Profile load error: $e');
+    if (!mounted) return;
+    setState(() { _loadError = true; });
+  } finally {
+    if (mounted) setState(() { _isLoading = false; });
+  }
+}
+```
+
+Also fix the build method:
+```dart
+if (_isLoading) {
+  return Scaffold(
+    appBar: AppBar(title: Text('પ્રોફાઇલ / Profile')),
+    body: Center(child: CircularProgressIndicator(
+      color: AppColors.primaryGreen)),
+  );
+}
+
+if (_loadError || _user == null) {
+  return Scaffold(
+    appBar: AppBar(title: Text('પ્રોફાઇલ / Profile')),
+    body: Center(child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.error_outline, size: 48, color: Colors.grey),
+        SizedBox(height: 16),
+        Text('પ્રોફાઇલ લોડ ન થઈ', style: TextStyle(fontSize: 16)),
+        SizedBox(height: 8),
+        ElevatedButton(
+          onPressed: () { setState(() { _isLoading = true; }); _load(); },
+          child: Text('ફરી પ્રયાસ / Retry')),
+      ],
+    )),
+  );
+}
+```
+
+=== ISSUE 2: SAME PHONE — ROLE CONFLICT ===
+
+When same phone logs in as Customer but Firestore has role: 'saathi',
+show a role selection dialog instead of silently redirecting:
+
+In otp_screen.dart and login_screen.dart _handlePostLogin():
+
+```dart
+Future<void> _handlePostLogin(String uid, String loginRole) async {
+  final doc = await FirebaseFirestore.instance
+      .collection('users').doc(uid).get();
+
+  if (!mounted) return;
+
+  if (!doc.exists) {
+    // Brand new user — go to setup based on login choice
+    if (loginRole == 'saathi') {
+      _goRemoveAll(const SaathiRegisterScreen());
+    } else {
+      _goRemoveAll(const ProfileSetupScreen());
+    }
+    return;
+  }
+
+  final savedRole = doc.data()!['role'] as String? ?? 'customer';
+
+  // SAME ROLE — just navigate
+  if (savedRole == loginRole ||
+      (savedRole == 'customer' && loginRole == 'customer') ||
+      (savedRole == 'saathi' && loginRole == 'saathi')) {
+    if (savedRole == 'saathi') {
+      _goRemoveAll(const SaathiMainShell());
+    } else {
+      _goRemoveAll(const CustomerMainShell());
+    }
+    return;
+  }
+
+  // ROLE CONFLICT — same phone, different role chosen
+  // Show dialog to let user pick
+  if (!mounted) return;
+  final choice = await showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20)),
+      title: Column(children: [
+        Icon(Icons.person_outline, size: 48,
+          color: AppColors.primaryGreen),
+        SizedBox(height: 8),
+        Text('કયા રૂપે ચાલુ કરવું?',
+          style: TextStyle(fontSize: 18,
+            fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center),
+        Text('Which mode to continue?',
+          style: TextStyle(fontSize: 13, color: Colors.grey),
+          textAlign: TextAlign.center),
+      ]),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(
+          'આ નંબર પહેલેથી ${savedRole == 'saathi' ? 'સાથી' : 'Customer'} '
+          'તરીકે નોંધાયેલ છે.',
+          style: TextStyle(fontSize: 13, color: Colors.grey),
+          textAlign: TextAlign.center),
+        SizedBox(height: 8),
+        Text('This number is already registered as '
+          '${savedRole == 'saathi' ? 'Gaam Saathi' : 'Customer'}.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+          textAlign: TextAlign.center),
+      ]),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        // Continue as saved role
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: savedRole == 'saathi'
+                  ? AppColors.primaryOrange : AppColors.primaryGreen,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+              padding: EdgeInsets.symmetric(vertical: 14),
+            ),
+            onPressed: () => Navigator.pop(context, savedRole),
+            child: Text(
+              savedRole == 'saathi'
+                  ? '🛵 Gaam Saathi તરીકે ચાલુ'
+                  : '👤 Customer તરીકે ચાலુ',
+              style: TextStyle(color: Colors.white,
+                fontWeight: FontWeight.bold)),
+          ),
+        ),
+        SizedBox(height: 8),
+        // Switch role
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: Colors.grey.shade300),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+              padding: EdgeInsets.symmetric(vertical: 14),
+            ),
+            onPressed: () => Navigator.pop(context, loginRole),
+            child: Text(
+              loginRole == 'saathi'
+                  ? '🛵 Saathi તરીકે Switch કરો'
+                  : '👤 Customer તરીકે Switch કરો',
+              style: TextStyle(color: AppColors.textGrey)),
+          ),
+        ),
+        SizedBox(height: 4),
+      ],
+    ),
+  );
+
+  if (!mounted || choice == null) return;
+
+  // Update role in Firestore if switched
+  if (choice != savedRole) {
+    await FirebaseFirestore.instance
+        .collection('users').doc(uid)
+        .update({'role': choice,
+          'updatedAt': FieldValue.serverTimestamp()});
+  }
+
+  if (choice == 'saathi') {
+    // Check if saathi profile exists
+    final saathiDoc = await FirebaseFirestore.instance
+        .collection('saathis').doc(uid).get();
+    if (!saathiDoc.exists) {
+      _goRemoveAll(const SaathiRegisterScreen());
+    } else {
+      _goRemoveAll(const SaathiMainShell());
+    }
+  } else {
+    _goRemoveAll(const CustomerMainShell());
+  }
+}
+```
+
+=== ISSUE 3: COMPLETE UI OVERHAUL ALL SCREENS ===
+
+### WELCOME SCREEN — fix cut off, make full screen proper
+
+```dart
+@override
+Widget build(BuildContext context) {
+  final size = MediaQuery.of(context).size;
+  return Scaffold(
+    body: Stack(children: [
+      // Full green top section
+      Container(
+        height: size.height * 0.58,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1B5E20), Color(0xFF2E7D32),
+              Color(0xFF388E3C)],
+          ),
+        ),
+      ),
+      // White bottom section with rounded top
+      Positioned(
+        bottom: 0,
+        child: Container(
+          width: size.width,
+          height: size.height * 0.48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(36)),
+          ),
+        ),
+      ),
+      // Content
+      SafeArea(
+        child: Column(children: [
+          SizedBox(height: size.height * 0.06),
+          // Logo box
+          Container(
+            width: 100, height: 100,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Icon(Icons.directions_bus_outlined,
+              color: Colors.white, size: 56),
+          ),
+          SizedBox(height: 16),
+          Text('GaamRide', style: TextStyle(
+            fontSize: 38, fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 1)),
+          SizedBox(height: 6),
+          Text('ગામનો પોતાનો સાથી', style: TextStyle(
+            fontSize: 17, color: Colors.white70)),
+          Text('Village Transport at Your Fingertips',
+            style: TextStyle(fontSize: 13,
+              color: Colors.white54)),
+          SizedBox(height: size.height * 0.1),
+          // Buttons inside white section
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 28),
+            child: Column(children: [
+              // Customer button
+              SizedBox(
+                width: double.infinity, height: 58,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryGreen,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) =>
+                      LoginScreen(role: 'customer'))),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.person_outline,
+                        color: Colors.white, size: 22),
+                      SizedBox(width: 10),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Customer તરીકે ચાલુ કરો',
+                            style: TextStyle(fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                          Text('Continue as Customer',
+                            style: TextStyle(fontSize: 11,
+                              color: Colors.white70)),
+                        ],
+                      ),
+                      Spacer(),
+                      Icon(Icons.arrow_forward_ios,
+                        color: Colors.white70, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 14),
+              // Saathi button
+              SizedBox(
+                width: double.infinity, height: 58,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryOrange,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) =>
+                      LoginScreen(role: 'saathi'))),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.two_wheeler,
+                        color: Colors.white, size: 22),
+                      SizedBox(width: 10),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Gaam Saathi બનો',
+                            style: TextStyle(fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                          Text('Become a Driver & Earn',
+                            style: TextStyle(fontSize: 11,
+                              color: Colors.white70)),
+                        ],
+                      ),
+                      Spacer(),
+                      Icon(Icons.arrow_forward_ios,
+                        color: Colors.white70, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+              Row(mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.location_on_outlined,
+                    size: 14, color: Colors.grey),
+                  SizedBox(width: 4),
+                  Text('Mahuva Taluka · Surat · Gujarat',
+                    style: TextStyle(fontSize: 12,
+                      color: Colors.grey)),
+                ]),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  );
+}
+```
+
+### CUSTOMER HOME SCREEN — complete redesign
+
+```dart
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Color(0xFFF5F5F5),
+    body: CustomScrollView(
+      slivers: [
+        // App bar with greeting
+        SliverAppBar(
+          expandedHeight: 130,
+          floating: false,
+          pinned: true,
+          backgroundColor: AppColors.primaryGreen,
+          flexibleSpace: FlexibleSpaceBar(
+            background: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('kem cho, ${_userName} 👋',
+                              style: TextStyle(fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                            Text('Mahuva Taluka · Surat · Gujarat',
+                              style: TextStyle(fontSize: 12,
+                                color: Colors.white70)),
+                          ],
+                        )),
+                        // Notification bell
+                        IconButton(
+                          icon: Icon(Icons.notifications_outlined,
+                            color: Colors.white),
+                          onPressed: () {},
+                        ),
+                      ]),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(children: [
+
+              // Booking card (white card with both location fields)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 16, offset: Offset(0, 4))],
+                ),
+                child: Column(children: [
+                  // Pickup location
+                  Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Row(children: [
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.bgGreen,
+                          shape: BoxShape.circle),
+                        child: Icon(Icons.my_location,
+                          color: AppColors.primaryGreen, size: 20),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('તમારું સ્થાન / Your Location',
+                            style: TextStyle(fontSize: 11,
+                              color: Colors.grey)),
+                          Text(_currentVillageName.isEmpty
+                              ? 'સ્થાન શોધી રહ્યા છે...'
+                              : _currentVillageName,
+                            style: TextStyle(fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: _currentVillageName.isEmpty
+                                  ? Colors.grey
+                                  : AppColors.textDark)),
+                        ],
+                      )),
+                      if (_currentVillageName.isEmpty)
+                        SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.primaryGreen))
+                      else
+                        IconButton(
+                          icon: Icon(Icons.refresh,
+                            color: AppColors.primaryGreen),
+                          onPressed: _detectLocation),
+                    ]),
+                  ),
+                  // Dotted divider
+                  Padding(
+                    padding: EdgeInsets.only(left: 36),
+                    child: Row(children: List.generate(30,
+                      (i) => Expanded(child: Container(
+                        height: 1,
+                        color: i % 2 == 0
+                            ? Colors.grey.shade200 : Colors.transparent,
+                      )))),
+                  ),
+                  // Destination
+                  GestureDetector(
+                    onTap: _selectDestination,
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Row(children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: Color(0xFFFBE9E7),
+                            shape: BoxShape.circle),
+                          child: Icon(Icons.location_on,
+                            color: AppColors.primaryOrange, size: 20),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('ક્યાં જવું છે? / Where to go?',
+                              style: TextStyle(fontSize: 11,
+                                color: Colors.grey)),
+                            Text(_selectedVillage?.name
+                                ?? 'ગામ પસંદ કરો...',
+                              style: TextStyle(fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: _selectedVillage == null
+                                    ? Colors.grey.shade400
+                                    : AppColors.textDark)),
+                          ],
+                        )),
+                        Icon(Icons.keyboard_arrow_down,
+                          color: Colors.grey),
+                      ]),
+                    ),
+                  ),
+                ]),
+              ),
+
+              SizedBox(height: 12),
+
+              // Fare estimate (shows after destination selected)
+              if (_selectedVillage != null)
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.currency_rupee,
+                      color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Column(crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('અંદાજિત ભાડું',
+                          style: TextStyle(fontSize: 11,
+                            color: Colors.white70)),
+                        Text('₹${_estimatedFare.toStringAsFixed(0)}',
+                          style: TextStyle(fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                      ],
+                    ),
+                    Spacer(),
+                    Container(width: 1, height: 36,
+                      color: Colors.white30),
+                    SizedBox(width: 16),
+                    Column(crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('અંતર', style: TextStyle(
+                          fontSize: 11, color: Colors.white70)),
+                        Text('${_distanceKm.toStringAsFixed(1)} km',
+                          style: TextStyle(fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                      ],
+                    ),
+                    SizedBox(width: 16),
+                    Column(crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('~સમય', style: TextStyle(
+                          fontSize: 11, color: Colors.white70)),
+                        Text('${_etaMinutes} min',
+                          style: TextStyle(fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                      ],
+                    ),
+                  ]),
+                ),
+
+              SizedBox(height: 16),
+
+              // Find Saathi button
+              SizedBox(
+                width: double.infinity, height: 56,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _selectedVillage != null
+                        ? AppColors.primaryGreen : Colors.grey.shade300,
+                    elevation: _selectedVillage != null ? 4 : 0,
+                    shadowColor: AppColors.primaryGreen.withOpacity(0.4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: _selectedVillage != null
+                      ? _findSaathi : null,
+                  child: _isSearching
+                      ? Row(mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(width: 20, height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2)),
+                            SizedBox(width: 12),
+                            Text('શોધી રહ્યા છીએ...',
+                              style: TextStyle(fontSize: 16,
+                                color: Colors.white)),
+                          ])
+                      : Row(mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search, color: Colors.white),
+                            SizedBox(width: 8),
+                            Text('સાથી શોધો / Find Saathi',
+                              style: TextStyle(fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                          ]),
+                ),
+              ),
+
+              SizedBox(height: 24),
+
+              // Saathi results
+              if (_saathiList.isNotEmpty) ...[
+                Row(children: [
+                  Text('${_saathiList.length} સાથી મળ્યા',
+                    style: TextStyle(fontSize: 16,
+                      fontWeight: FontWeight.bold)),
+                  Spacer(),
+                  Text('નજીકના પ્રથમ',
+                    style: TextStyle(fontSize: 12,
+                      color: Colors.grey)),
+                ]),
+                SizedBox(height: 12),
+                ..._saathiList.map((saathi) =>
+                  _buildSaathiCard(saathi)),
+              ],
+
+              if (_searched && _saathiList.isEmpty)
+                _buildEmptyState(),
+
+            ]),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildSaathiCard(SaathiModel saathi) {
+  final isPreferred = saathi.village == _currentVillageName;
+  final distMeters = Geolocator.distanceBetween(
+    _userLat, _userLng,
+    saathi.position?.latitude ?? 0,
+    saathi.position?.longitude ?? 0);
+  final distKm = distMeters / 1000;
+  final eta = (distKm / 25 * 60).round();
+
+  return Container(
+    margin: EdgeInsets.only(bottom: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: isPreferred
+          ? Border.all(color: AppColors.primaryGreen, width: 1.5)
+          : null,
+      boxShadow: [BoxShadow(
+        color: Colors.black.withOpacity(0.06),
+        blurRadius: 12, offset: Offset(0, 3))],
+    ),
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(children: [
+        Row(children: [
+          // Avatar
+          Container(
+            width: 50, height: 50,
+            decoration: BoxDecoration(
+              color: isPreferred ? AppColors.bgGreen : Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Center(child: Text(
+              saathi.name.isNotEmpty ? saathi.name[0].toUpperCase() : 'S',
+              style: TextStyle(fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isPreferred ? AppColors.primaryGreen
+                    : Colors.grey))),
+          ),
+          SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Text(saathi.name, style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.bold)),
+                SizedBox(width: 8),
+                if (isPreferred)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGreen,
+                      borderRadius: BorderRadius.circular(20)),
+                    child: Text('⭐ PREFERRED',
+                      style: TextStyle(color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold)),
+                  ),
+              ]),
+              SizedBox(height: 4),
+              Row(children: [
+                _vehicleBadge(saathi.vehicleType),
+                SizedBox(width: 8),
+                Icon(Icons.star, color: Colors.amber, size: 14),
+                Text(' ${saathi.rating.toStringAsFixed(1)}',
+                  style: TextStyle(fontSize: 12,
+                    color: Colors.grey)),
+              ]),
+            ],
+          )),
+          // Distance info
+          Column(crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('${distKm.toStringAsFixed(1)} km',
+                style: TextStyle(fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryGreen)),
+              Text('~$eta min',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+        ]),
+        SizedBox(height: 12),
+        Row(children: [
+          // Call button
+          Expanded(child: OutlinedButton.icon(
+            icon: Icon(Icons.call, size: 16,
+              color: AppColors.primaryGreen),
+            label: Text('કૉલ', style: TextStyle(
+              color: AppColors.primaryGreen)),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: AppColors.primaryGreen),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+              padding: EdgeInsets.symmetric(vertical: 10)),
+            onPressed: () => launchUrl(
+              Uri.parse('tel:${saathi.phone}')),
+          )),
+          SizedBox(width: 10),
+          // Book button
+          Expanded(flex: 2, child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGreen,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+              padding: EdgeInsets.symmetric(vertical: 10)),
+            onPressed: () => _bookRide(saathi),
+            child: Text('બુક કરો / Book',
+              style: TextStyle(color: Colors.white,
+                fontWeight: FontWeight.bold)),
+          )),
+        ]),
+      ]),
+    ),
+  );
+}
+
+Widget _vehicleBadge(String type) {
+  final icons = {
+    'bike': '🛵', 'auto': '🛺', 'cycle': '🚲'};
+  final labels = {
+    'bike': 'Bike', 'auto': 'Auto', 'cycle': 'Cycle'};
+  return Container(
+    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(8)),
+    child: Text('${icons[type] ?? '🛵'} ${labels[type] ?? type}',
+      style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+  );
+}
+```
+
+### SAATHI DASHBOARD — redesign
+
+```dart
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Color(0xFFF0F7F0),
+    body: CustomScrollView(slivers: [
+      // Header
+      SliverAppBar(
+        pinned: true,
+        expandedHeight: 160,
+        backgroundColor: AppColors.primaryGreen,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.logout, color: Colors.white),
+            onPressed: _logout),
+        ],
+        flexibleSpace: FlexibleSpaceBar(
+          background: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
+              ),
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: Row(children: [
+                  Container(
+                    width: 56, height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle),
+                    child: Center(child: Text(
+                      _saathiName.isNotEmpty
+                          ? _saathiName[0].toUpperCase() : 'S',
+                      style: TextStyle(fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white))),
+                  ),
+                  SizedBox(width: 14),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(_saathiName, style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                      Text('$_vehicleType · $_village',
+                        style: TextStyle(fontSize: 13,
+                          color: Colors.white70)),
+                      Row(children: [
+                        Icon(Icons.star, color: Colors.amber, size: 14),
+                        Text(' $_rating  ·  $_totalRides rides',
+                          style: TextStyle(fontSize: 12,
+                            color: Colors.white70)),
+                      ]),
+                    ],
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(children: [
+
+            // Online/Offline toggle — BIG card
+            GestureDetector(
+              onTap: _toggleOnline,
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: 300),
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _isOnline ? AppColors.primaryGreen
+                      : Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(
+                    color: (_isOnline ? AppColors.primaryGreen
+                        : Colors.grey).withOpacity(0.3),
+                    blurRadius: 16, offset: Offset(0, 6))],
+                ),
+                child: Row(children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_isOnline ? '🟢 Online' : '⭕ Offline',
+                        style: TextStyle(fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                      Text(_isOnline
+                          ? 'રાઈડ મળી શકે · GPS ચાલુ'
+                          : 'ઑફલાઇન · કોઈ રાઈડ નહીં',
+                        style: TextStyle(fontSize: 13,
+                          color: Colors.white70)),
+                    ],
+                  ),
+                  Spacer(),
+                  Switch(
+                    value: _isOnline,
+                    onChanged: (_) => _toggleOnline(),
+                    activeColor: Colors.white,
+                    activeTrackColor: Colors.white.withOpacity(0.4),
+                    inactiveThumbColor: Colors.white,
+                    inactiveTrackColor: Colors.white.withOpacity(0.3),
+                  ),
+                ]),
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Earnings row
+            Row(children: [
+              _earningsCard('આજે', '₹${_todayEarnings.toStringAsFixed(0)}',
+                '${_todayRides} rides', Colors.green),
+              SizedBox(width: 10),
+              _earningsCard('આ અઠવાડિયે',
+                '₹${_weekEarnings.toStringAsFixed(0)}',
+                'this week', Colors.blue),
+              SizedBox(width: 10),
+              _earningsCard('આ મહિને',
+                '₹${_monthEarnings.toStringAsFixed(0)}',
+                'this month', Colors.orange),
+            ]),
+
+            SizedBox(height: 16),
+
+            // Incoming requests section
+            if (_isOnline) ...[
+              Row(children: [
+                Text('આવતી વિનંતીઓ',
+                  style: TextStyle(fontSize: 16,
+                    fontWeight: FontWeight.bold)),
+                SizedBox(width: 8),
+                if (_pendingRides.isNotEmpty)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(20)),
+                    child: Text('${_pendingRides.length}',
+                      style: TextStyle(color: Colors.white,
+                        fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+              ]),
+              SizedBox(height: 8),
+              if (_pendingRides.isEmpty)
+                Container(
+                  padding: EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16)),
+                  child: Center(child: Column(children: [
+                    Icon(Icons.directions_bike_outlined,
+                      size: 40, color: Colors.grey.shade300),
+                    SizedBox(height: 8),
+                    Text('નવી રાઈડ ની રાહ...',
+                      style: TextStyle(color: Colors.grey)),
+                    Text('Waiting for new rides...',
+                      style: TextStyle(fontSize: 12,
+                        color: Colors.grey.shade400)),
+                  ])),
+                )
+              else
+                ..._pendingRides.map((ride) =>
+                  _buildIncomingRideCard(ride)),
+            ],
+
+            SizedBox(height: 16),
+
+            // Recent rides
+            if (_recentRides.isNotEmpty) ...[
+              Text('તાજેતરની સવારી / Recent Rides',
+                style: TextStyle(fontSize: 16,
+                  fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              ..._recentRides.take(5).map((doc) =>
+                _buildRecentRideItem(doc)),
+            ],
+
+          ]),
+        ),
+      ),
+    ]),
+  );
+}
+
+Widget _earningsCard(String label, String amount,
+    String sub, Color color) {
+  return Expanded(child: Container(
+    padding: EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [BoxShadow(
+        color: Colors.black.withOpacity(0.05),
+        blurRadius: 8)],
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey)),
+        SizedBox(height: 4),
+        Text(amount, style: TextStyle(fontSize: 18,
+          fontWeight: FontWeight.bold, color: color)),
+        Text(sub, style: TextStyle(fontSize: 10, color: Colors.grey)),
+      ],
+    ),
+  ));
+}
+```
+
+### GAAMHAUL HOME — redesign
+
+```dart
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Color(0xFFFFF3E0),
+    body: CustomScrollView(slivers: [
+      SliverAppBar(
+        pinned: true,
+        backgroundColor: AppColors.primaryOrange,
+        title: Row(children: [
+          Text('GaamHaul', style: TextStyle(
+            fontSize: 22, fontWeight: FontWeight.bold,
+            color: Colors.white)),
+          SizedBox(width: 8),
+          Text('🚛', style: TextStyle(fontSize: 20)),
+        ]),
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Container(height: 1,
+            color: Colors.orange.shade700)),
+      ),
+
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(children: [
+
+            // Info banner
+            Container(
+              padding: EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.orange.shade200)),
+              child: Row(children: [
+                Icon(Icons.info_outline, color: AppColors.primaryOrange),
+                SizedBox(width: 10),
+                Expanded(child: Text(
+                  'ખેતી, shifting કે logistics માટે વાહન ભાડે કરો. '
+                  'ₓ ₹75 booking fee.',
+                  style: TextStyle(fontSize: 13,
+                    color: Colors.orange.shade800))),
+              ]),
+            ),
+
+            SizedBox(height: 16),
+
+            // Auto-detected pickup
+            Container(
+              padding: EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14)),
+              child: Row(children: [
+                Icon(Icons.my_location, color: AppColors.primaryOrange),
+                SizedBox(width: 10),
+                Column(crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Pickup / ઉઠાવ સ્થાન',
+                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    Text(_pickupVillage ?? 'સ્થાન શોધી રહ્યા છે...',
+                      style: TextStyle(fontSize: 15,
+                        fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Spacer(),
+                IconButton(
+                  icon: Icon(Icons.refresh, color: Colors.grey),
+                  onPressed: _detectLocation),
+              ]),
+            ),
+
+            SizedBox(height: 12),
+
+            // Vehicle type grid
+            Text('વાહન પ્રકાર / Vehicle Type',
+              style: TextStyle(fontSize: 15,
+                fontWeight: FontWeight.bold)),
+            SizedBox(height: 10),
+            GridView.count(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              childAspectRatio: 1.6,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              children: [
+                _vehicleCard('mini_tempo', '🚛', 'મિની ટેમ્પો',
+                  'Mini Tempo', 'up to 500kg'),
+                _vehicleCard('pickup', '🛻', 'પિકઅપ ટ્રક',
+                  'Pickup Truck', 'up to 1000kg'),
+                _vehicleCard('tractor', '🚜', 'ટ્રેક્ટર',
+                  'Tractor', 'Farm use'),
+                _vehicleCard('truck_407', '🚚', '407 ટ્રક',
+                  '407 Truck', 'up to 3000kg'),
+              ],
+            ),
+
+            SizedBox(height: 16),
+
+            // Duration selector
+            Text('સમય / Duration',
+              style: TextStyle(fontSize: 15,
+                fontWeight: FontWeight.bold)),
+            SizedBox(height: 10),
+            Row(children: [
+              _durationChip('1h', '1 કલાક', '1 hour'),
+              SizedBox(width: 8),
+              _durationChip('2h', '2 કલાક', '2 hours'),
+              SizedBox(width: 8),
+              _durationChip('half_day', 'અર્ધો', 'Half day'),
+              SizedBox(width: 8),
+              _durationChip('full_day', 'આખો', 'Full day'),
+            ]),
+
+            SizedBox(height: 16),
+
+            // Load description
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14)),
+              child: TextField(
+                controller: _loadCtrl,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  prefixIcon: Icon(Icons.inventory_2_outlined,
+                    color: Colors.grey),
+                  hintText: 'શું લઈ જવાનું? (વૈકલ્પિક)\n'
+                    'e.g. શાકભાજી, ખાતર, સામાન...',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(16),
+                ),
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Cost preview
+            if (_selectedVehicleType != null && _selectedDuration != null)
+              Container(
+                padding: EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFE65100), Color(0xFFFF5722)]),
+                  borderRadius: BorderRadius.circular(14)),
+                child: Row(children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('App Booking Fee',
+                        style: TextStyle(fontSize: 11,
+                          color: Colors.white70)),
+                      Text('₹75', style: TextStyle(fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                    ],
+                  ),
+                  Spacer(),
+                  Container(width: 1, height: 40,
+                    color: Colors.white30),
+                  SizedBox(width: 16),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Owner gets directly',
+                        style: TextStyle(fontSize: 11,
+                          color: Colors.white70)),
+                      Text('₹${_estimatedOwnerEarnings.toStringAsFixed(0)}',
+                        style: TextStyle(fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                    ],
+                  ),
+                ]),
+              ),
+
+            SizedBox(height: 16),
+
+            // Search button
+            SizedBox(
+              width: double.infinity, height: 56,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                    (_selectedVehicleType != null && _selectedDuration != null)
+                        ? AppColors.primaryOrange : Colors.grey.shade300,
+                  elevation: 4,
+                  shadowColor: AppColors.primaryOrange.withOpacity(0.4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16))),
+                onPressed: _canSearch ? _searchVehicles : null,
+                child: Row(mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.search, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text('વાહન શોધો / Search Vehicles',
+                      style: TextStyle(fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                  ]),
+              ),
+            ),
+
+            SizedBox(height: 24),
+
+            // Results
+            if (_vehicles.isNotEmpty) ...[
+              Text('${_vehicles.length} વાહન મળ્યા',
+                style: TextStyle(fontSize: 16,
+                  fontWeight: FontWeight.bold)),
+              SizedBox(height: 12),
+              ..._vehicles.map((v) => _buildVehicleCard(v)),
+            ],
+
+          ]),
+        ),
+      ),
+    ]),
+  );
+}
+```
+
+### PROFILE SCREEN — redesign
+
+```dart
+@override
+Widget build(BuildContext context) {
+  if (_isLoading) return _loadingScreen();
+  if (_user == null) return _errorScreen();
+
+  return Scaffold(
+    backgroundColor: Color(0xFFF5F5F5),
+    body: CustomScrollView(slivers: [
+      SliverAppBar(
+        expandedHeight: 200,
+        pinned: true,
+        backgroundColor: AppColors.primaryGreen,
+        flexibleSpace: FlexibleSpaceBar(
+          background: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+              ),
+            ),
+            child: SafeArea(child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(height: 20),
+                // Avatar
+                Container(
+                  width: 80, height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2)),
+                  child: Center(child: Text(
+                    _user!.name.isNotEmpty
+                        ? _user!.name[0].toUpperCase() : 'U',
+                    style: TextStyle(fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white))),
+                ),
+                SizedBox(height: 10),
+                Text(_user!.name, style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.bold,
+                  color: Colors.white)),
+                Text(_user!.phone, style: TextStyle(
+                  fontSize: 14, color: Colors.white70)),
+                SizedBox(height: 4),
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20)),
+                  child: Text('📍 ${_user!.village}',
+                    style: TextStyle(fontSize: 13,
+                      color: Colors.white)),
+                ),
+              ],
+            )),
+          ),
+        ),
+      ),
+
+      SliverToBoxAdapter(child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(children: [
+
+          // Stats row
+          Row(children: [
+            _statCard('કુલ સવારી', '$_totalRides', '🛵'),
+            SizedBox(width: 10),
+            _statCard('ખર્ચ', '₹${_totalSpent.toStringAsFixed(0)}', '💰'),
+            SizedBox(width: 10),
+            _statCard('ગામ', _user!.village, '🏘️'),
+          ]),
+
+          SizedBox(height: 20),
+
+          // Menu items
+          _menuSection('Account', [
+            _menuItem(Icons.person_outline, 'પ્રોફાઇલ Edit', () {}),
+            _menuItem(Icons.history, 'Ride History', () =>
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => RideHistoryScreen()))),
+            _menuItem(Icons.local_shipping_outlined,
+              'Haul History', () {}),
+          ]),
+
+          SizedBox(height: 12),
+
+          _menuSection('Support', [
+            _menuItem(Icons.help_outline, 'Help & Support', () {}),
+            _menuItem(Icons.info_outline, 'About GaamRide', () {}),
+          ]),
+
+          SizedBox(height: 12),
+
+          // Logout
+          SizedBox(width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: Icon(Icons.logout, color: Colors.red),
+              label: Text('Logout', style: TextStyle(color: Colors.red)),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.red.shade200),
+                padding: EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14))),
+              onPressed: _logout)),
+
+          SizedBox(height: 8),
+          Text('GaamRide v1.0.0 · Mahuva Taluka',
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
+          SizedBox(height: 24),
+        ]),
+      )),
+    ]),
+  );
+}
+
+Widget _statCard(String label, String value, String emoji) {
+  return Expanded(child: Container(
+    padding: EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [BoxShadow(
+        color: Colors.black.withOpacity(0.05),
+        blurRadius: 8)]),
+    child: Column(children: [
+      Text(emoji, style: TextStyle(fontSize: 24)),
+      SizedBox(height: 4),
+      Text(value, style: TextStyle(fontSize: 16,
+        fontWeight: FontWeight.bold)),
+      Text(label, style: TextStyle(fontSize: 11,
+        color: Colors.grey), textAlign: TextAlign.center),
+    ]),
+  ));
+}
+
+Widget _menuSection(String title, List<Widget> items) {
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(title, style: TextStyle(
+            fontSize: 12, color: Colors.grey,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.5))),
+        ...items,
+      ]),
+  );
+}
+
+Widget _menuItem(IconData icon, String label, VoidCallback onTap) {
+  return ListTile(
+    leading: Container(
+      width: 36, height: 36,
+      decoration: BoxDecoration(
+        color: AppColors.bgGreen,
+        borderRadius: BorderRadius.circular(10)),
+      child: Icon(icon, color: AppColors.primaryGreen, size: 18)),
+    title: Text(label, style: TextStyle(fontSize: 15)),
+    trailing: Icon(Icons.chevron_right, color: Colors.grey),
+    onTap: onTap,
+  );
+}
+```
+
+=== FIRESTORE RULES — PRODUCTION READY ===
+
+Replace existing Firestore rules with these complete rules:

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_strings.dart';
-import '../services/auth_service.dart';
-import '../models/user_model.dart';
 import 'profile_setup_screen.dart';
 import 'saathi/saathi_main_shell.dart';
 import 'customer/customer_main_shell.dart';
@@ -41,8 +40,17 @@ class _OtpScreenState extends State<OtpScreen> {
   void initState() {
     super.initState();
     if (widget.userCredential != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _handleUserCredential(widget.userCredential!));
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _handlePostLogin(widget.userCredential!.user!.uid, widget.role));
     }
+  }
+
+  void _goRemoveAll(Widget screen) {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+      (_) => false,
+    );
   }
 
   Future<void> _verify() async {
@@ -57,45 +65,162 @@ class _OtpScreenState extends State<OtpScreen> {
         smsCode: _otp,
       );
       final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-      await _handleUserCredential(userCred);
+      await _handlePostLogin(userCred.user!.uid, widget.role);
     } on FirebaseAuthException catch (e) {
       setState(() {
         _loading = false;
         _error = e.message ?? 'Invalid OTP. Try again.';
       });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _error = 'Something went wrong. Please try again.';
+      });
     }
   }
 
-  Future<void> _handleUserCredential(UserCredential cred) async {
-    final uid = cred.user!.uid;
-    final existing = await AuthService.getUser(uid);
+  Future<void> _handlePostLogin(String uid, String loginRole) async {
+    setState(() => _loading = true);
 
-    if (!mounted) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(uid).get();
 
-    if (existing == null) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ProfileSetupScreen(
-            uid: uid,
-            phone: widget.phone,
-            role: widget.role,
-          ),
+      if (!mounted) return;
+
+      if (!doc.exists) {
+        // Brand new user — go to setup based on login choice
+        _goRemoveAll(ProfileSetupScreen(
+          uid: uid,
+          phone: widget.phone,
+          role: loginRole,
+        ));
+        return;
+      }
+
+      final savedRole = (doc.data()!['role'] as String?) ?? 'customer';
+
+      // Same role — just navigate
+      if (savedRole == loginRole) {
+        if (savedRole == 'saathi') {
+          _goRemoveAll(const SaathiMainShell());
+        } else {
+          _goRemoveAll(const CustomerMainShell());
+        }
+        return;
+      }
+
+      // Role conflict — same phone, different role chosen
+      if (!mounted) return;
+      setState(() => _loading = false);
+
+      final choice = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Column(children: [
+            Icon(Icons.person_outline, size: 48, color: AppColors.primaryGreen),
+            const SizedBox(height: 8),
+            const Text('કયા રૂપે ચાલુ કરવું?',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center),
+            const Text('Which mode to continue?',
+                style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+                textAlign: TextAlign.center),
+          ]),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(
+              'આ નંબર પહેલેથી ${savedRole == 'saathi' ? 'Gaam Saathi' : 'Customer'} '
+              'તરીકે નોંધાયેલ છે.',
+              style: const TextStyle(fontSize: 13, color: AppColors.textGrey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'This number is already registered as '
+              '${savedRole == 'saathi' ? 'Gaam Saathi' : 'Customer'}.',
+              style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+              textAlign: TextAlign.center,
+            ),
+          ]),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            // Continue as saved role
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: savedRole == 'saathi'
+                      ? AppColors.primaryOrange : AppColors.primaryGreen,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(context, savedRole),
+                child: Text(
+                  savedRole == 'saathi'
+                      ? '🛵 Gaam Saathi તરીકે ચાલુ'
+                      : '👤 Customer તરીકે ચાલુ',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Switch role
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.grey.shade300),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(context, loginRole),
+                child: Text(
+                  loginRole == 'saathi'
+                      ? '🛵 Saathi તરીકે Switch કરો'
+                      : '👤 Customer તરીકે Switch કરો',
+                  style: const TextStyle(color: AppColors.textGrey),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
         ),
-        (_) => false,
       );
-    } else if (existing.role == 'saathi') {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const SaathiMainShell()),
-        (_) => false,
-      );
-    } else {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerMainShell()),
-        (_) => false,
-      );
+
+      if (!mounted || choice == null) return;
+      setState(() => _loading = true);
+
+      // Update role in Firestore if switched
+      if (choice != savedRole) {
+        await FirebaseFirestore.instance
+            .collection('users').doc(uid)
+            .update({'role': choice, 'updatedAt': FieldValue.serverTimestamp()});
+      }
+
+      if (!mounted) return;
+
+      if (choice == 'saathi') {
+        // Check if saathi profile exists
+        final saathiDoc = await FirebaseFirestore.instance
+            .collection('saathis').doc(uid).get();
+        if (!saathiDoc.exists) {
+          _goRemoveAll(ProfileSetupScreen(uid: uid, phone: widget.phone, role: 'saathi'));
+        } else {
+          _goRemoveAll(const SaathiMainShell());
+        }
+      } else {
+        _goRemoveAll(const CustomerMainShell());
+      }
+    } catch (e) {
+      debugPrint('Post-login error: $e');
+      if (mounted) {
+        setState(() { _loading = false; _error = 'Login error. Please try again.'; });
+      }
     }
   }
 
@@ -123,55 +248,67 @@ class _OtpScreenState extends State<OtpScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header icon
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                  color: _color.withAlpha(25),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.sms_outlined, color: _color, size: 28),
+              ),
+              const SizedBox(height: 16),
               Text(
                 AppStrings.otpSent,
                 style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: _color,
-                ),
+                    fontSize: 24, fontWeight: FontWeight.bold, color: _color),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 'OTP sent to +91 ${widget.phone}',
-                style: const TextStyle(color: AppColors.textGrey),
+                style: const TextStyle(color: AppColors.textGrey, fontSize: 14),
               ),
               const SizedBox(height: 36),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(
-                  6,
-                  (i) => SizedBox(
-                    width: 46,
-                    child: TextField(
-                      controller: _controllers[i],
-                      focusNode: _focusNodes[i],
-                      keyboardType: TextInputType.number,
-                      maxLength: 1,
-                      textAlign: TextAlign.center,
-                      decoration: InputDecoration(
-                        counterText: '',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: _color, width: 2),
-                        ),
+                children: List.generate(6, (i) => SizedBox(
+                  width: 46,
+                  child: TextField(
+                    controller: _controllers[i],
+                    focusNode: _focusNodes[i],
+                    keyboardType: TextInputType.number,
+                    maxLength: 1,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      counterText: '',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold),
-                      onChanged: (v) => _onDigitInput(i, v),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: _color, width: 2),
+                      ),
                     ),
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold),
+                    onChanged: (v) => _onDigitInput(i, v),
                   ),
-                ),
+                )),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!,
-                    style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                Row(children: [
+                  const Icon(Icons.error_outline, color: AppColors.error, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(_error!,
+                      style: const TextStyle(color: AppColors.error, fontSize: 12))),
+                ]),
               ],
               const SizedBox(height: 32),
               SizedBox(
@@ -182,10 +319,14 @@ class _OtpScreenState extends State<OtpScreen> {
                     backgroundColor: _color,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
                   ),
                   onPressed: _loading ? null : _verify,
                   child: _loading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? const SizedBox(
+                          width: 24, height: 24,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2.5))
                       : const Text(
                           AppStrings.verifyOtp,
                           style: TextStyle(
