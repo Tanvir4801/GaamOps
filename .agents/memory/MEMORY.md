@@ -2,5 +2,7 @@
 - [Firestore collection names](firestore-collections.md) — canonical names that must be used everywhere; bugs were fixed from wrong names
 - [Promo codes](promo-codes.md) — hardcoded in ride_request_screen: GAAM10=₹10, FIRSTRIDE=₹20, MAHUVA5=₹5; FavouriteRoutesScreen.saveRoute() is called from ride_request on confirm
 - [Flutter animation pattern](flutter-animations.md) — all premium animations use AnimationController in initState + dispose; radar uses CustomPainter with SweepGradient; shimmer uses LinearGradient with animated position
+- [Registration flow](registration-flow.md) — OTP screen routes new users to CustomerRegistrationScreen or SaathiRegistrationScreen (in screens/auth/); ProfileSetupScreen is legacy, no longer used for new users
+- [Admin CRUD conventions](admin-crud.md) — always soft-delete (isDeleted:true), always batch-write saathis+users together, VillagesPage uses 'saathis' (plural) collection with isOnline/isAvailable for active count
 - [GaamRide model APIs](gaamride-model-apis.md) — SaathiModel has no isVerified; use isBlocked. SettingsService.getSettings() returns AppSettingsModel (call .toMap() for FareCalculator). Future.wait with mixed return types needs sequential awaits to avoid cast issues.
 - [flutter_map v6 notes](flutter-map-v6.md) — flutter_map ^6.1.0 + latlong2 ^0.9.0 used for OSM tracking screen. Polyline.isDotted was removed in v6 — do not use it. MapController must be disposed manually. CameraConstraint.contain(bounds: LatLngBounds(sw, ne)) locks to region. OSM attribution text required by tile usage policy.

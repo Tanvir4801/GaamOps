@@ -42,7 +42,7 @@ export default function VillagesPage() {
       onSnapshot(collection(db, 'villages'), (snapshot) => {
         setVillages(snapshot.docs.map((docRef) => ({ id: docRef.id, ...docRef.data() })))
       }),
-      onSnapshot(collection(db, 'saathi'), (snapshot) => {
+      onSnapshot(collection(db, 'saathis'), (snapshot) => {
         setSaathi(snapshot.docs.map((docRef) => ({ id: docRef.id, ...docRef.data() })))
       }),
     ]
@@ -53,8 +53,8 @@ export default function VillagesPage() {
   const activeSaathiByVillage = useMemo(() => {
     return saathi.reduce((acc, driver) => {
       const village = String(driver.village || '').trim()
-      const status = String(driver.status || '').toLowerCase()
-      if (!village || status !== 'active') return acc
+      if (!village || driver.isBlocked || driver.isDeleted) return acc
+      if (!driver.isOnline && !driver.isAvailable) return acc
       acc[village] = (acc[village] || 0) + 1
       return acc
     }, {})

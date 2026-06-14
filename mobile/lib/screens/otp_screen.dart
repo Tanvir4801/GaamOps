@@ -3,7 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_strings.dart';
-import 'profile_setup_screen.dart';
+import 'auth/customer_registration_screen.dart';
+import 'auth/saathi_registration_screen.dart';
 import 'saathi/saathi_main_shell.dart';
 import 'customer/customer_main_shell.dart';
 
@@ -89,12 +90,12 @@ class _OtpScreenState extends State<OtpScreen> {
       if (!mounted) return;
 
       if (!doc.exists) {
-        // Brand new user — go to setup based on login choice
-        _goRemoveAll(ProfileSetupScreen(
-          uid: uid,
-          phone: widget.phone,
-          role: loginRole,
-        ));
+        // Brand new user — go to registration based on login role
+        if (loginRole == 'saathi') {
+          _goRemoveAll(SaathiRegistrationScreen(uid: uid, phone: widget.phone));
+        } else {
+          _goRemoveAll(CustomerRegistrationScreen(uid: uid, phone: widget.phone));
+        }
         return;
       }
 
@@ -209,7 +210,7 @@ class _OtpScreenState extends State<OtpScreen> {
         final saathiDoc = await FirebaseFirestore.instance
             .collection('saathis').doc(uid).get();
         if (!saathiDoc.exists) {
-          _goRemoveAll(ProfileSetupScreen(uid: uid, phone: widget.phone, role: 'saathi'));
+          _goRemoveAll(SaathiRegistrationScreen(uid: uid, phone: widget.phone));
         } else {
           _goRemoveAll(const SaathiMainShell());
         }
