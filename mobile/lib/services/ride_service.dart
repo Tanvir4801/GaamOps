@@ -198,6 +198,7 @@ class RideService {
     final todayStart = DateTime(now.year, now.month, now.day);
     final weekStart = todayStart.subtract(Duration(days: now.weekday - 1));
     final monthStart = DateTime(now.year, now.month, 1);
+    final sevenDaysAgo = todayStart.subtract(const Duration(days: 6));
 
     final snap = await _rides
         .where('saathiId', isEqualTo: saathiId)
@@ -209,17 +210,40 @@ class RideService {
     double monthEarnings = 0;
     int todayRides = 0;
 
-    for (final doc in snap.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+    // 7-day daily breakdown: index 0 = 6 days ago, index 6 = today
+    final List<double> dailyEarnings = List.filled(7, 0.0);
+    final List<int> dailyRides = List.filled(7, 0);
+
+    // Collect recent rides for the trips list (sorted by completedAt desc)
+    final allRides = snap.docs
+        .map((d) => d.data() as Map<String, dynamic>)
+        .where((d) => d['completedAt'] != null)
+        .toList()
+      ..sort((a, b) {
+        final aT = (a['completedAt'] as Timestamp).toDate();
+        final bT = (b['completedAt'] as Timestamp).toDate();
+        return bT.compareTo(aT);
+      });
+
+    for (final data in allRides) {
       final fare = (data['fare'] ?? 0).toDouble();
-      final completedAt = (data['completedAt'] as Timestamp?)?.toDate();
-      if (completedAt == null) continue;
+      final completedAt = (data['completedAt'] as Timestamp).toDate();
 
       if (completedAt.isAfter(monthStart)) monthEarnings += fare;
       if (completedAt.isAfter(weekStart)) weekEarnings += fare;
       if (completedAt.isAfter(todayStart)) {
         todayEarnings += fare;
         todayRides++;
+      }
+
+      // Daily breakdown for last 7 days
+      if (completedAt.isAfter(sevenDaysAgo.subtract(const Duration(seconds: 1)))) {
+        final completedDay = DateTime(completedAt.year, completedAt.month, completedAt.day);
+        final daysDiff = todayStart.difference(completedDay).inDays;
+        if (daysDiff >= 0 && daysDiff < 7) {
+          dailyEarnings[6 - daysDiff] += fare;
+          dailyRides[6 - daysDiff]++;
+        }
       }
     }
 
@@ -229,6 +253,9 @@ class RideService {
       'month': monthEarnings,
       'todayRides': todayRides,
       'totalRides': snap.docs.length,
+      'dailyEarnings': dailyEarnings,
+      'dailyRides': dailyRides,
+      'recentRides': allRides.take(5).toList(),
     };
   }
 }
