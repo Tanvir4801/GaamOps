@@ -80,10 +80,73 @@ class _OtpScreenState extends State<OtpScreen> {
     }
   }
 
+  // Migrate admin-created temp saathi doc (docId = phone number) to real uid
+  Future<void> _migrateTempSaathiIfExists(String uid, String phone) async {
+    try {
+      final phoneClean = phone.replaceAll('+91', '').trim();
+      final tempDoc = await FirebaseFirestore.instance
+          .collection('saathis').doc(phoneClean).get();
+      if (!tempDoc.exists) return;
+
+      final tempData = tempDoc.data()!;
+      // Only migrate if uid == phone number (temp admin-created doc)
+      if (tempData['uid'] != phoneClean) return;
+
+      debugPrint('📦 Migrating admin-created saathi doc: $phoneClean → $uid');
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Create saathis doc with real uid
+      batch.set(
+        FirebaseFirestore.instance.collection('saathis').doc(uid),
+        {
+          ...tempData,
+          'uid': uid,
+          'phone': '+91$phoneClean',
+          'isVerified': tempData['isVerified'] ?? false,
+          'status': tempData['status'] ?? 'pending',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+
+      // Create/overwrite users doc with real uid
+      batch.set(
+        FirebaseFirestore.instance.collection('users').doc(uid),
+        {
+          'uid': uid,
+          'name': tempData['name'] ?? '',
+          'displayName': tempData['name'] ?? '',
+          'phone': '+91$phoneClean',
+          'role': 'saathi',
+          'village': tempData['village'] ?? '',
+          'profilePhoto': '',
+          'fcmToken': '',
+          'isBlocked': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+
+      // Delete old temp docs (phone-keyed)
+      batch.delete(tempDoc.ref);
+      final tempUserDoc = await FirebaseFirestore.instance
+          .collection('users').doc(phoneClean).get();
+      if (tempUserDoc.exists) batch.delete(tempUserDoc.ref);
+
+      await batch.commit();
+      debugPrint('✅ Migration complete: $phoneClean → $uid');
+    } catch (e) {
+      debugPrint('⚠️ Migration error (non-fatal): $e');
+    }
+  }
+
   Future<void> _handlePostLogin(String uid, String loginRole) async {
     setState(() => _loading = true);
 
     try {
+      // First: check if admin pre-created a saathi record with phone as docId
+      await _migrateTempSaathiIfExists(uid, widget.phone);
+
       final doc = await FirebaseFirestore.instance
           .collection('users').doc(uid).get();
 

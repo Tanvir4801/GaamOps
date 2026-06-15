@@ -1,0 +1,1059 @@
+GaamRide — Production database fix, migration, and Firebase rules.
+
+I can see these EXACT bugs in my Firestore from screenshots:
+
+BUG 1: users/{uid}/role = "customer | saathi | both" 
+       Must be single string: "customer" OR "saathi" OR "both"
+
+BUG 2: rides/{id}/status = "searching|accepted|arriving|started|completed|cancelled"
+       Must be single string: "searching" (default)
+
+BUG 3: haul_bookings/{id}/status = "searching|accepted|started|completed|cancelled"
+       haul_bookings/{id}/duration = "1h|2h|half_day|full_day"
+       haul_bookings/{id}/vehicleType = "mini_tempo|pickup|tractor|truck_407"
+       All must be single string values
+
+BUG 4: haul_bookings has field named "customerId::" (double colon)
+       Must be renamed to "customerId"
+
+BUG 5: saathis/{id}/position geopoint = [37.42 N, 122.08 W] San Francisco
+       Must be reset to GeoPoint(0,0) — will update when Saathi goes online
+
+BUG 6: saathis missing village field in some documents
+
+===================================================
+STEP 1 — ONE-TIME MIGRATION SCRIPT
+===================================================
+
+Create this as a standalone Node.js script.
+Run it ONCE from terminal, then delete it.
+File: scripts/migrate_firestore.js
+
+```javascript
+// scripts/migrate_firestore.js
+// Run: node scripts/migrate_firestore.js
+// Run ONCE then delete this file
+
+const admin = require('firebase-admin');
+const serviceAccount = require('./serviceAccountKey.json');
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+const db = admin.firestore();
+
+async function runMigrations() {
+  console.log('🚀 GaamRide Firestore Migration Starting...\n');
+  
+  await fixUserRoles();
+  await fixRidesStatus();
+  await fixHaulBookings();
+  await fixSaathisPosition();
+  await fixSaathisMissingFields();
+  
+  console.log('\n✅ All migrations complete!');
+  process.exit(0);
+}
+
+// ─── FIX 1: User roles ──────────────────────────
+async function fixUserRoles() {
+  console.log('📝 Fixing user roles...');
+  const snap = await db.collection('users').get();
+  const batch = db.batch();
+  let fixed = 0;
+
+  for (const doc of snap.docs) {
+    const role = doc.data().role;
+    
+    // Fix pipe-separated roles
+    if (role && role.includes('|')) {
+      // "customer | saathi | both" → pick the most specific role
+      let correctRole = 'customer';
+      if (role.includes('saathi') && role.includes('customer')) {
+        correctRole = 'both';
+      } else if (role.includes('saathi')) {
+        correctRole = 'saathi';
+      }
+      
+      batch.update(doc.ref, {
+        role: correctRole,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`  Fixed user ${doc.id}: "${role}" → "${correctRole}"`);
+      fixed++;
+    }
+
+    // Fix missing fields
+    const updates = {};
+    if (!doc.data().isBlocked) updates.isBlocked = false;
+    if (!doc.data().fcmToken) updates.fcmToken = '';
+    if (!doc.data().profilePhoto) updates.profilePhoto = '';
+    if (!doc.data().displayName && doc.data().name) {
+      updates.displayName = doc.data().name;
+    }
+    
+    if (Object.keys(updates).length > 0) {
+      batch.update(doc.ref, updates);
+    }
+  }
+
+  await batch.commit();
+  console.log(`  ✅ Fixed ${fixed} user role(s)\n`);
+}
+
+// ─── FIX 2: Rides status ────────────────────────
+async function fixRidesStatus() {
+  console.log('🛵 Fixing rides...');
+  const snap = await db.collection('rides').get();
+  const batch = db.batch();
+  let fixed = 0;
+
+  const validStatuses = [
+    'searching', 'accepted', 'arriving', 
+    'started', 'completed', 'cancelled'
+  ];
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const updates = {};
+    let needsFix = false;
+
+    // Fix pipe-separated status
+    if (data.status && data.status.includes('|')) {
+      updates.status = 'cancelled'; // old template docs = cancelled
+      needsFix = true;
+      console.log(`  Fixed ride ${doc.id}: status pipe → "cancelled"`);
+    }
+
+    // Fix completedAt = 0 (number, should be timestamp or null)
+    if (data.completedAt === 0) {
+      updates.completedAt = null;
+      needsFix = true;
+    }
+
+    // Fix empty customerId
+    if (data.customerId === '') {
+      updates.customerId = 'unknown';
+      needsFix = true;
+    }
+
+    // Fix fare/distance = 0 but status is not searching
+    // Keep as is — these are test docs
+
+    if (needsFix) {
+      batch.update(doc.ref, updates);
+      fixed++;
+    }
+  }
+
+  await batch.commit();
+  console.log(`  ✅ Fixed ${fixed} ride(s)\n`);
+}
+
+// ─── FIX 3: Haul bookings ───────────────────────
+async function fixHaulBookings() {
+  console.log('🚛 Fixing haul_bookings...');
+  const snap = await db.collection('haul_bookings').get();
+  let fixed = 0;
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const updates = {};
+    let needsFix = false;
+
+    // Fix pipe status
+    if (data.status && data.status.includes('|')) {
+      updates.status = 'cancelled';
+      needsFix = true;
+    }
+
+    // Fix pipe duration
+    if (data.duration && data.duration.includes('|')) {
+      updates.duration = '1h';
+      updates.durationHours = 1;
+      needsFix = true;
+    }
+
+    // Fix pipe vehicleType
+    if (data.vehicleType && data.vehicleType.includes('|')) {
+      updates.vehicleType = 'mini_tempo';
+      needsFix = true;
+    }
+
+    // Fix double-colon field names
+    // Firestore doesn't allow renaming fields directly
+    // We need to read, delete old field, set new field
+    const rawData = doc.data();
+    
+    // Check for "customerId::" field (double colon bug)
+    if ('customerId::' in rawData) {
+      updates['customerId'] = rawData['customerId::'] || '';
+      // We can't delete fields with illegal names via batch
+      // so we use set with merge to overwrite the whole doc
+      needsFix = true;
+      console.log(`  Found double-colon field in ${doc.id}`);
+    }
+
+    // Fix missing bookingId
+    if (!data.bookingId || data.bookingId === '') {
+      updates.bookingId = doc.id;
+      needsFix = true;
+    }
+
+    if (needsFix) {
+      // Use set with merge to handle the double-colon field
+      await doc.ref.set({
+        ...rawData,
+        ...updates,
+        // Remove the bad field by not including it
+        'customerId::': admin.firestore.FieldValue.delete(),
+        'customerName::': admin.firestore.FieldValue.delete(),
+      }, { merge: true });
+      
+      fixed++;
+      console.log(`  Fixed haul_booking ${doc.id}`);
+    }
+  }
+
+  console.log(`  ✅ Fixed ${fixed} haul_booking(s)\n`);
+}
+
+// ─── FIX 4: Saathi positions ────────────────────
+async function fixSaathisPosition() {
+  console.log('📍 Fixing saathi positions...');
+  const snap = await db.collection('saathis').get();
+  const batch = db.batch();
+  let fixed = 0;
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const pos = data.position;
+    
+    // Check if position has San Francisco coordinates
+    // SF is around 37.4N, 122.0W
+    if (pos && pos.geopoint) {
+      const lat = pos.geopoint._latitude || pos.geopoint.latitude || 0;
+      const lng = pos.geopoint._longitude || pos.geopoint.longitude || 0;
+      
+      if (Math.abs(lat - 37.42) < 0.1 && Math.abs(lng - (-122.08)) < 0.1) {
+        // This is San Francisco — reset to zero (will update on next login)
+        batch.update(doc.ref, {
+          position: {
+            geohash: '',
+            geopoint: new admin.firestore.GeoPoint(0, 0)
+          },
+          isAvailable: false,
+          isOnline: false,
+        });
+        console.log(`  Reset SF coordinates for saathi ${doc.id}`);
+        fixed++;
+      }
+    }
+
+    // Fix fcmToken null → empty string
+    if (data.fcmToken === null || data.fcmToken === undefined) {
+      batch.update(doc.ref, { fcmToken: '' });
+    }
+  }
+
+  await batch.commit();
+  console.log(`  ✅ Fixed ${fixed} saathi position(s)\n`);
+}
+
+// ─── FIX 5: Saathi missing fields ───────────────
+async function fixSaathisMissingFields() {
+  console.log('🔧 Fixing saathi missing fields...');
+  const snap = await db.collection('saathis').get();
+  const batch = db.batch();
+  let fixed = 0;
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const updates = {};
+    let needsFix = false;
+
+    if (data.isBlocked === undefined) {
+      updates.isBlocked = false;
+      needsFix = true;
+    }
+    if (data.isVerified === undefined) {
+      updates.isVerified = false;
+      needsFix = true;
+    }
+    if (!data.village) {
+      updates.village = 'Kos'; // default — admin can fix later
+      needsFix = true;
+    }
+    if (!data.vehicleNumber) {
+      updates.vehicleNumber = '';
+      needsFix = true;
+    }
+    if (!data.vehicleType) {
+      updates.vehicleType = 'bike';
+      needsFix = true;
+    }
+    if (data.rating === undefined) {
+      updates.rating = 5.0;
+      needsFix = true;
+    }
+    if (data.totalRides === undefined) {
+      updates.totalRides = 0;
+      needsFix = true;
+    }
+
+    if (needsFix) {
+      batch.update(doc.ref, updates);
+      fixed++;
+      console.log(`  Fixed missing fields for saathi ${doc.id}`);
+    }
+  }
+
+  await batch.commit();
+  console.log(`  ✅ Fixed ${fixed} saathi document(s)\n`);
+}
+
+runMigrations().catch(console.error);
+```
+
+Run this script:
+```bash
+cd scripts
+npm init -y
+npm install firebase-admin
+# Download serviceAccountKey.json from Firebase Console → Settings → Service Accounts
+node migrate_firestore.js
+```
+
+===================================================
+STEP 2 — PRODUCTION FIRESTORE RULES
+===================================================
+
+These rules match EXACTLY your current collections:
+app_settings, haul_bookings, rides, saathis, users, villages
+
+Paste in Firebase Console → Firestore → Rules → Publish:
+rules_version = '2';
+
+service cloud.firestore {
+
+match /databases/{database}/documents {
+// ═══════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════
+
+function isAuth() {
+  return request.auth != null;
+}
+
+function isOwner(uid) {
+  return isAuth() && request.auth.uid == uid;
+}
+
+function getUserData() {
+  return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+}
+
+function userExists() {
+  return isAuth() && 
+    exists(/databases/$(database)/documents/users/$(request.auth.uid));
+}
+
+function isNotBlocked() {
+  return isAuth() && userExists() && getUserData().isBlocked != true;
+}
+
+function isSaathi() {
+  return isAuth() && userExists() && 
+    (getUserData().role == 'saathi' || getUserData().role == 'both');
+}
+
+// Valid single-string values only
+function isValidRole(role) {
+  return role == 'customer' || role == 'saathi' || role == 'both';
+}
+
+function isValidRideStatus(status) {
+  return status == 'searching' || status == 'accepted' || 
+         status == 'arriving' || status == 'started' || 
+         status == 'completed' || status == 'cancelled';
+}
+
+function isValidHaulStatus(status) {
+  return status == 'searching' || status == 'accepted' || 
+         status == 'started' || status == 'completed' || 
+         status == 'cancelled';
+}
+
+function isValidDuration(d) {
+  return d == '1h' || d == '2h' || d == 'half_day' || d == 'full_day';
+}
+
+function isValidVehicleType(v) {
+  return v == 'bike' || v == 'auto' || v == 'cycle';
+}
+
+function isValidHaulVehicle(v) {
+  return v == 'mini_tempo' || v == 'pickup' || 
+         v == 'tractor' || v == 'truck_407';
+}
+
+// ═══════════════════════════════════════
+// USERS COLLECTION
+// ═══════════════════════════════════════
+match /users/{userId} {
+  
+  // Read own profile only
+  allow read: if isOwner(userId);
+  
+  // Create: new user registering
+  allow create: if isOwner(userId)
+    && request.resource.data.uid == request.auth.uid
+    && isValidRole(request.resource.data.role)
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 100
+    && request.resource.data.phone is string
+    && request.resource.data.phone.size() > 0
+    // role must be exactly one string — no pipes allowed
+    && !request.resource.data.role.matches('.*\\|.*')
+    // isBlocked cannot be set by user
+    && request.resource.data.isBlocked == false;
+  
+  // Update: own profile, cannot change uid or isBlocked
+  allow update: if isOwner(userId)
+    && request.resource.data.uid == userId
+    && isValidRole(request.resource.data.role)
+    // Cannot change isBlocked themselves
+    && request.resource.data.isBlocked == resource.data.isBlocked
+    // role must be single string — no pipes
+    && !request.resource.data.role.matches('.*\\|.*');
+  
+  allow delete: if false;
+}
+
+// ═══════════════════════════════════════
+// SAATHIS COLLECTION
+// ═══════════════════════════════════════
+match /saathis/{saathiId} {
+  
+  // Any logged-in non-blocked user can read saathis (for discovery)
+  allow read: if isNotBlocked();
+  
+  // Create: saathi registering themselves
+  allow create: if isOwner(saathiId)
+    && isNotBlocked()
+    && request.resource.data.uid == request.auth.uid
+    && isValidVehicleType(request.resource.data.vehicleType)
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.isAvailable == false
+    && request.resource.data.isOnline == false
+    && request.resource.data.isBlocked == false
+    && request.resource.data.totalRides == 0
+    && request.resource.data.rating >= 1.0
+    && request.resource.data.rating <= 5.0;
+  
+  // Update: saathi updates own doc
+  allow update: if isOwner(saathiId)
+    && isNotBlocked()
+    && request.resource.data.uid == saathiId
+    // Cannot unblock themselves
+    && request.resource.data.isBlocked == resource.data.isBlocked
+    // Cannot change totalRides directly (only via ride completion)
+    // Allow: position, isAvailable, isOnline, lastSeen, fcmToken
+    // Vehicle type must remain valid
+    && isValidVehicleType(request.resource.data.vehicleType);
+  
+  allow delete: if false;
+}
+
+// ═══════════════════════════════════════
+// RIDES COLLECTION
+// ═══════════════════════════════════════
+match /rides/{rideId} {
+  
+  // Read: customer of this ride OR assigned saathi
+  // Also: online saathis can read searching rides
+  allow read: if isAuth() && isNotBlocked() && (
+    resource.data.customerId == request.auth.uid ||
+    resource.data.saathiId == request.auth.uid ||
+    resource.data.status == 'searching'
+  );
+  
+  // Create: customers only, correct initial values
+  allow create: if isAuth() && isNotBlocked()
+    && request.resource.data.customerId == request.auth.uid
+    && request.resource.data.status == 'searching'
+    && isValidRideStatus(request.resource.data.status)
+    // No pipe characters in status
+    && !request.resource.data.status.matches('.*\\|.*')
+    && request.resource.data.saathiId == ''
+    && request.resource.data.fare is number
+    && request.resource.data.fare >= 0
+    && request.resource.data.fare <= 500
+    && request.resource.data.distance is number
+    && request.resource.data.distance >= 0
+    && request.resource.data.pickupVillage is string
+    && request.resource.data.pickupVillage.size() > 0
+    && request.resource.data.destinationVillage is string
+    && request.resource.data.destinationVillage.size() > 0
+    && request.resource.data.pickupVillage != 
+       request.resource.data.destinationVillage
+    && request.resource.data.otp is string
+    && request.resource.data.otp.size() == 4;
+  
+  // Update: customer can cancel, saathi can accept/update/complete
+  allow update: if isAuth() && isNotBlocked() && (
+    // Status must always be single valid value
+    isValidRideStatus(request.resource.data.status)
+    && !request.resource.data.status.matches('.*\\|.*')
+  ) && (
+    // Customer: can only cancel their own ride
+    (resource.data.customerId == request.auth.uid &&
+     request.resource.data.status == 'cancelled') ||
+    // Saathi: can accept (when saathiId is empty or theirs)
+    (resource.data.saathiId == request.auth.uid &&
+     resource.data.customerId != '') ||
+    // Saathi: can accept an unassigned ride
+    (resource.data.saathiId == '' &&
+     resource.data.status == 'searching')
+  );
+  
+  allow delete: if false;
+}
+
+// ═══════════════════════════════════════
+// HAUL BOOKINGS COLLECTION
+// ═══════════════════════════════════════
+match /haul_bookings/{bookingId} {
+  
+  // Read: customer or vehicle owner
+  allow read: if isAuth() && isNotBlocked() && (
+    resource.data.customerId == request.auth.uid ||
+    resource.data.vehicleOwnerId == request.auth.uid ||
+    resource.data.status == 'searching'
+  );
+  
+  // Create: customers booking a vehicle
+  allow create: if isAuth() && isNotBlocked()
+    && request.resource.data.customerId == request.auth.uid
+    && request.resource.data.status == 'searching'
+    && isValidHaulStatus(request.resource.data.status)
+    && !request.resource.data.status.matches('.*\\|.*')
+    && isValidDuration(request.resource.data.duration)
+    && !request.resource.data.duration.matches('.*\\|.*')
+    && isValidHaulVehicle(request.resource.data.vehicleType)
+    && !request.resource.data.vehicleType.matches('.*\\|.*')
+    && request.resource.data.appCommission == 75
+    && request.resource.data.vehicleOwnerId == ''
+    && request.resource.data.pickupVillage is string
+    && request.resource.data.pickupVillage.size() > 0;
+  
+  // Update: customer can cancel, vehicle owner can accept/complete
+  allow update: if isAuth() && isNotBlocked() && (
+    isValidHaulStatus(request.resource.data.status)
+    && !request.resource.data.status.matches('.*\\|.*')
+    && isValidDuration(request.resource.data.duration)
+    && !request.resource.data.duration.matches('.*\\|.*')
+  ) && (
+    (resource.data.customerId == request.auth.uid &&
+     request.resource.data.status == 'cancelled') ||
+    (resource.data.vehicleOwnerId == request.auth.uid) ||
+    (resource.data.vehicleOwnerId == '' &&
+     resource.data.status == 'searching')
+  );
+  
+  allow delete: if false;
+}
+
+// ═══════════════════════════════════════
+// HAUL VEHICLES COLLECTION
+// ═══════════════════════════════════════
+match /haul_vehicles/{ownerId} {
+  
+  // Any logged-in user can read (for search)
+  allow read: if isNotBlocked();
+  
+  // Create: vehicle owner registering their vehicle
+  allow create: if isOwner(ownerId)
+    && isNotBlocked()
+    && request.resource.data.uid == request.auth.uid
+    && isValidHaulVehicle(request.resource.data.vehicleType)
+    && request.resource.data.ratePerHour is number
+    && request.resource.data.ratePerHour >= 100
+    && request.resource.data.ratePerHour <= 5000
+    && request.resource.data.isAvailable == false
+    && request.resource.data.isBlocked == false;
+  
+  // Update: owner updates availability/location
+  allow update: if isOwner(ownerId)
+    && isNotBlocked()
+    && request.resource.data.uid == ownerId
+    && request.resource.data.isBlocked == resource.data.isBlocked
+    && isValidHaulVehicle(request.resource.data.vehicleType);
+  
+  allow delete: if false;
+}
+
+// ═══════════════════════════════════════
+// VILLAGES COLLECTION — READ ONLY
+// ═══════════════════════════════════════
+match /villages/{villageId} {
+  allow read: if isAuth();
+  // Write only from Firebase Console or admin SDK
+  allow write: if false;
+}
+
+// ═══════════════════════════════════════
+// APP SETTINGS — READ ONLY
+// ═══════════════════════════════════════
+match /app_settings/{docId} {
+  allow read: if isAuth();
+  // Write only from Firebase Console or admin SDK
+  allow write: if false;
+}
+
+// ═══════════════════════════════════════
+// SOS ALERTS
+// ═══════════════════════════════════════
+match /sos_alerts/{alertId} {
+  allow read: if isAuth() &&
+    resource.data.userId == request.auth.uid;
+  allow create: if isAuth()
+    && request.resource.data.userId == request.auth.uid;
+  allow update, delete: if false;
+}
+
+// ═══════════════════════════════════════
+// DENY EVERYTHING ELSE
+// ═══════════════════════════════════════
+match /{document=**} {
+  allow read, write: if false;
+}
+}
+
+}
+
+===================================================
+STEP 3 — MATCH CHECK: Flutter App vs Web Admin
+===================================================
+
+From your screenshots, here is what I see:
+
+✅ MATCHING CORRECTLY:
+  app_settings/config    — both use this
+  haul_bookings          — both use this  
+  rides                  — both use this
+  saathis                — both use this
+  users                  — both use this
+  villages               — both use this
+
+❌ MISMATCHES TO FIX:
+
+MISMATCH 1 — Web admin reads saathis but Flutter writes to saathis
+  Web admin must also listen to saathis (not saathi — old collection)
+  Check admin/src/pages/SaathiManager.jsx:
+  Must use: collection(db, 'saathis')    ✅
+  NOT:      collection(db, 'saathi')     ❌ (old collection, deleted)
+
+MISMATCH 2 — Web admin AddSaathi writes to saathis WITHOUT uid as docId
+  Fix: when admin adds saathi via web panel, use a proper docId
+  Since this saathi has no Firebase Auth account yet,
+  use phone number as docId temporarily:
+  
+  const docId = phone.replace('+91', '').trim();
+  await setDoc(doc(db, 'saathis', docId), {
+    uid: docId, // temp uid = phone until they login
+    ...data
+  });
+
+  When the Saathi actually logs in via OTP, the auth_service
+  must check if a saathis document exists with their phone
+  as docId and migrate it to their real Firebase uid:
+
+  // In Flutter auth_service.dart, after OTP login:
+  Future<void> _migrateTempSaathiDoc(String uid, String phone) async {
+    final phoneWithoutCode = phone.replaceAll('+91', '');
+    
+    // Check if temp doc exists (created by admin)
+    final tempDoc = await FirebaseFirestore.instance
+        .collection('saathis')
+        .doc(phoneWithoutCode)
+        .get();
+    
+    if (tempDoc.exists && tempDoc.data()!['uid'] == phoneWithoutCode) {
+      // Migrate: copy data to real uid doc, delete temp
+      final data = tempDoc.data()!;
+      data['uid'] = uid; // update uid to real firebase uid
+      
+      final batch = FirebaseFirestore.instance.batch();
+      batch.set(
+        FirebaseFirestore.instance.collection('saathis').doc(uid),
+        data);
+      batch.set(
+        FirebaseFirestore.instance.collection('users').doc(uid),
+        {
+          'uid': uid,
+          'name': data['name'],
+          'displayName': data['name'],
+          'phone': phone,
+          'role': 'saathi',
+          'village': data['village'],
+          'profilePhoto': '',
+          'fcmToken': '',
+          'isBlocked': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      batch.delete(tempDoc.ref); // remove temp doc
+      
+      await batch.commit();
+      print('✅ Migrated temp saathi doc to uid: $uid');
+    }
+  }
+
+MISMATCH 3 — rides/status stored as pipe string
+  Flutter app creates rides with status field set wrong
+  Fix in ride_service.dart createRide():
+  Must be: 'status': 'searching'
+  NOT:     'status': 'searching|accepted|...' 
+
+MISMATCH 4 — Web admin Revenue page reads wrong collection
+  Must read: rides (for GaamRide revenue)
+  Must read: haul_bookings (for GaamHaul commission)
+  NOT: bookings (old deleted collection)
+
+===================================================
+STEP 4 — FLUTTER DATA VALIDATION (prevent bad data)
+===================================================
+
+Add this validator in lib/services/ride_service.dart:
+
+```dart
+// Call before creating any Firestore document
+class DataValidator {
+  
+  static void validateRideData(Map<String, dynamic> data) {
+    const validStatuses = [
+      'searching', 'accepted', 'arriving', 
+      'started', 'completed', 'cancelled'
+    ];
+    
+    final status = data['status'] as String? ?? '';
+    
+    // CRITICAL: ensure no pipe characters
+    assert(!status.contains('|'),
+      'INVALID: status contains pipe: $status');
+    assert(validStatuses.contains(status),
+      'INVALID: status not in valid list: $status');
+    assert(data['customerId'] is String && 
+           !(data['customerId'] as String).isEmpty,
+      'INVALID: empty customerId');
+    assert(!data.containsKey('customerId::'),
+      'INVALID: double-colon field name found');
+    
+    // Fare must be realistic
+    final fare = (data['fare'] ?? 0).toDouble();
+    assert(fare >= 0 && fare <= 500,
+      'INVALID: fare out of range: $fare');
+    
+    // Distance in km (not meters!)
+    final dist = (data['distance'] ?? 0).toDouble();
+    assert(dist >= 0 && dist <= 50,
+      'INVALID: distance seems wrong (check meters vs km): $dist');
+  }
+  
+  static void validateHaulBooking(Map<String, dynamic> data) {
+    const validDurations = ['1h', '2h', 'half_day', 'full_day'];
+    const validVehicles = [
+      'mini_tempo', 'pickup', 'tractor', 'truck_407'
+    ];
+    const validStatuses = [
+      'searching', 'accepted', 'started', 'completed', 'cancelled'
+    ];
+    
+    final duration = data['duration'] as String? ?? '';
+    final vehicle = data['vehicleType'] as String? ?? '';
+    final status = data['status'] as String? ?? '';
+    
+    assert(!duration.contains('|'),
+      'INVALID duration contains pipe: $duration');
+    assert(validDurations.contains(duration),
+      'INVALID duration: $duration');
+    assert(!vehicle.contains('|'),
+      'INVALID vehicleType contains pipe: $vehicle');
+    assert(validVehicles.contains(vehicle),
+      'INVALID vehicleType: $vehicle');
+    assert(!status.contains('|'),
+      'INVALID status contains pipe: $status');
+    assert(validStatuses.contains(status),
+      'INVALID status: $status');
+    assert(data['appCommission'] == 75,
+      'INVALID: appCommission must be 75');
+  }
+  
+  static void validateUserData(Map<String, dynamic> data) {
+    const validRoles = ['customer', 'saathi', 'both'];
+    final role = data['role'] as String? ?? '';
+    
+    assert(!role.contains('|'),
+      'INVALID role contains pipe: $role');
+    assert(validRoles.contains(role),
+      'INVALID role: $role');
+    assert(data['uid'] is String,
+      'INVALID: missing uid');
+  }
+}
+```
+
+Use it like:
+```dart
+// In ride_service.dart before Firestore write:
+final rideData = { ...all fields... };
+if (kDebugMode) DataValidator.validateRideData(rideData);
+await _rides.doc(ref.id).set(rideData);
+```
+
+===================================================
+STEP 5 — FLUTTER AUTH SERVICE FIX
+===================================================
+
+Fix lib/services/auth_service.dart to handle temp saathi docs:
+
+```dart
+class AuthService {
+  
+  static Future<void> handlePostLogin(
+    BuildContext context, User firebaseUser) async {
+    
+    final uid = firebaseUser.uid;
+    final phone = firebaseUser.phoneNumber ?? '';
+    
+    // First check if temp admin-created saathi doc exists
+    await _migrateTempSaathiIfExists(uid, phone);
+    
+    // Then check users collection
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users').doc(uid).get();
+    
+    if (!context.mounted) return;
+    
+    if (!userDoc.exists) {
+      // Check if coming from saathi login flow
+      // (stored in SharedPreferences during login)
+      final prefs = await SharedPreferences.getInstance();
+      final loginRole = prefs.getString('login_role') ?? 'customer';
+      
+      if (loginRole == 'saathi') {
+        Navigator.pushAndRemoveUntil(context,
+          MaterialPageRoute(
+            builder: (_) => const SaathiRegistrationScreen()),
+          (route) => false);
+      } else {
+        Navigator.pushAndRemoveUntil(context,
+          MaterialPageRoute(
+            builder: (_) => const CustomerRegistrationScreen()),
+          (route) => false);
+      }
+      return;
+    }
+    
+    // User exists
+    final data = userDoc.data()!;
+    
+    // Check blocked
+    if (data['isBlocked'] == true) {
+      await FirebaseAuth.instance.signOut();
+      if (!context.mounted) return;
+      showDialog(context: context, builder: (_) => AlertDialog(
+        title: Text('Account Blocked'),
+        content: Text('તમારું account block થયેલ છે. '
+          'Admin નો સંપર્ક કરો.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'))],
+      ));
+      return;
+    }
+    
+    // Get role — fix if corrupted
+    String role = data['role'] as String? ?? 'customer';
+    if (role.contains('|')) {
+      // Fix corrupted role
+      if (role.contains('saathi') && role.contains('customer')) {
+        role = 'both';
+      } else if (role.contains('saathi')) {
+        role = 'saathi';
+      } else {
+        role = 'customer';
+      }
+      // Update in Firestore
+      await FirebaseFirestore.instance
+          .collection('users').doc(uid)
+          .update({'role': role});
+    }
+    
+    if (!context.mounted) return;
+    
+    if (role == 'saathi') {
+      Navigator.pushAndRemoveUntil(context,
+        MaterialPageRoute(builder: (_) => const SaathiMainShell()),
+        (route) => false);
+    } else {
+      Navigator.pushAndRemoveUntil(context,
+        MaterialPageRoute(
+          builder: (_) => const CustomerMainShell()),
+        (route) => false);
+    }
+  }
+  
+  static Future<void> _migrateTempSaathiIfExists(
+    String uid, String phone) async {
+    
+    try {
+      final phoneClean = phone.replaceAll('+91', '').trim();
+      
+      // Check if admin created a temp doc with phone as ID
+      final tempDoc = await FirebaseFirestore.instance
+          .collection('saathis')
+          .doc(phoneClean)
+          .get();
+      
+      if (!tempDoc.exists) return;
+      
+      final tempData = tempDoc.data()!;
+      // Only migrate if uid looks like a phone number (temp doc)
+      if (tempData['uid'] != phoneClean) return;
+      
+      print('📦 Migrating admin-created saathi doc...');
+      
+      final batch = FirebaseFirestore.instance.batch();
+      
+      // Create proper doc with real uid
+      batch.set(
+        FirebaseFirestore.instance.collection('saathis').doc(uid),
+        {
+          ...tempData,
+          'uid': uid,
+          'phone': phone,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      
+      // Create users doc
+      batch.set(
+        FirebaseFirestore.instance.collection('users').doc(uid),
+        {
+          'uid': uid,
+          'name': tempData['name'] ?? '',
+          'displayName': tempData['name'] ?? '',
+          'phone': phone,
+          'role': 'saathi',
+          'village': tempData['village'] ?? '',
+          'profilePhoto': '',
+          'fcmToken': '',
+          'isBlocked': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      
+      // Delete temp doc
+      batch.delete(tempDoc.ref);
+      
+      await batch.commit();
+      print('✅ Migration complete: $phoneClean → $uid');
+      
+    } catch (e) {
+      print('⚠️ Migration error (non-fatal): $e');
+    }
+  }
+}
+```
+
+===================================================
+STEP 6 — WEB ADMIN RULES FIX
+===================================================
+
+Web admin panel writes to Firestore using Firebase Admin SDK
+or regular Firebase JS SDK with admin email.
+
+Current problem: admin cannot write because rules block it.
+
+Fix: Add admin email check to rules using Custom Claims.
+
+In Firebase Console → Functions (or use admin script):
+```javascript
+// Set admin custom claim on your admin email user
+const admin = require('firebase-admin');
+// After getting admin user's uid:
+await admin.auth().setCustomUserClaims(adminUid, { admin: true });
+```
+
+Then update rules to allow admin writes:
+function isAdmin() {
+
+return isAuth() && request.auth.token.admin == true;
+
+}
+// Add to each collection:
+
+match /saathis/{saathiId} {
+
+allow read: if isNotBlocked() || isAdmin();
+
+allow write: if isOwner(saathiId) || isAdmin(); // admin CRUD
+
+}
+match /users/{userId} {
+
+allow read: if isOwner(userId) || isAdmin();
+
+allow write: if isOwner(userId) || isAdmin();
+
+}
+match /rides/{rideId} {
+
+allow read, write: if isAuth() || isAdmin();
+
+}
+match /haul_bookings/{bookingId} {
+
+allow read, write: if isAuth() || isAdmin();
+
+}
+match /villages/{villageId} {
+
+allow read: if isAuth();
+
+allow write: if isAdmin(); // admin manages villages
+
+}
+match /app_settings/{docId} {
+
+allow read: if isAuth();
+
+allow write: if isAdmin(); // admin changes fare settings
+
+}
+
+To set admin claim via simple script:
+```javascript
+// scripts/set_admin.js
+const admin = require('firebase-admin');
+const serviceAccount = require('./serviceAccountKey.json');
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+
+const adminEmail = 'admin@gaamride.com'; // YOUR admin email
+
+async function setAdmin() {
+  const user = await admin.auth().getUserByEmail(adminEmail);
+  await admin.auth().setCustomUserClaims(user.uid, { admin: true });
+  console.log(`✅ Admin claim set for ${adminEmail}`);
+  console.log('Sign out and sign in again in GaamOps to take effect.');
+  process.exit(0);
+}
+setAdmin().catch(console.error);
+```
+
+Run: node scripts/set_admin.js

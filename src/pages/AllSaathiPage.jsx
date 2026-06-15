@@ -253,9 +253,14 @@ export default function AllSaathiPage() {
 
   const handleAddSaathi = async (data) => {
     try {
-      const ref = doc(collection(db, 'saathis'))
-      await setDoc(ref, {
-        uid: ref.id,
+      // Use phone number (without +91) as temp docId so the Flutter app
+      // can migrate it to a real UID when the Saathi logs in for the first time
+      const phoneClean = data.phone.replace('+91', '').trim()
+      const batch = writeBatch(db)
+
+      // Write saathis doc — phone as docId (temp uid)
+      batch.set(doc(db, 'saathis', phoneClean), {
+        uid: phoneClean,
         name: data.name,
         phone: data.phone,
         village: data.village,
@@ -266,7 +271,8 @@ export default function AllSaathiPage() {
         isAvailable: false,
         isOnline: false,
         isBlocked: false,
-        isVerified: true,
+        isVerified: false,
+        status: 'pending',
         rating: 5.0,
         totalRides: 0,
         fcmToken: '',
@@ -274,7 +280,24 @@ export default function AllSaathiPage() {
         lastSeen: serverTimestamp(),
         createdAt: serverTimestamp(),
       })
-      toast.success(`${data.name} added as Saathi! ✅`)
+
+      // Also write a basic users doc so the Saathi can be found by phone
+      batch.set(doc(db, 'users', phoneClean), {
+        uid: phoneClean,
+        name: data.name,
+        displayName: data.name,
+        phone: data.phone,
+        role: 'saathi',
+        village: data.village,
+        profilePhoto: '',
+        fcmToken: '',
+        isBlocked: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+
+      await batch.commit()
+      toast.success(`${data.name} added! Will appear in Verifications. ✅`)
       setShowAddModal(false)
     } catch (e) {
       toast.error('Failed to add Saathi: ' + e.message)
