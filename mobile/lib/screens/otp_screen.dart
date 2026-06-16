@@ -359,7 +359,40 @@ class _OtpScreenState extends State<OtpScreen> {
         elevation: 0,
         foregroundColor: _color,
       ),
-      body: SafeArea(
+      body: Stack(children: [
+        // Decorative glass bubbles — colour matches role
+        Positioned(
+          top: -50, right: -50,
+          child: Container(
+            width: 180, height: 180,
+            decoration: BoxDecoration(
+              color: _color.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        Positioned(
+          top: 120, left: -70,
+          child: Container(
+            width: 220, height: 220,
+            decoration: BoxDecoration(
+              color: _color.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 60, right: 20,
+          child: Container(
+            width: 140, height: 140,
+            decoration: BoxDecoration(
+              color: _color.withOpacity(0.07),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        // Main content
+        SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -456,7 +489,8 @@ class _OtpScreenState extends State<OtpScreen> {
             ],
           ),
         ),
-      ),
+        ),
+      ]),
     );
   }
 
