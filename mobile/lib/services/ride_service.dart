@@ -169,10 +169,9 @@ class RideService {
     return _rides.doc(rideId).snapshots();
   }
 
-  // Targeted: only rides assigned to this specific saathi
-  static Stream<QuerySnapshot> watchIncomingRides(String saathiId) {
+  // Broadcast: all online saathis see every searching ride
+  static Stream<QuerySnapshot> watchIncomingRides() {
     return _rides
-        .where('targetSaathiId', isEqualTo: saathiId)
         .where('status', isEqualTo: RideModel.searching)
         .limit(5)
         .snapshots();

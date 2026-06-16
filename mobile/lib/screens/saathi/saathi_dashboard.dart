@@ -66,9 +66,8 @@ class _SaathiDashboardState extends State<SaathiDashboard>
   }
 
   void _listenForRides() {
-    if (_uid == null) return;
     _rideSub?.cancel();
-    _rideSub = RideService.watchIncomingRides(_uid!).listen((snap) {
+    _rideSub = RideService.watchIncomingRides().listen((snap) {
       if (!mounted) return;
       final rides = snap.docs.map((d) => RideModel.fromFirestore(d)).toList();
       if (rides.isNotEmpty && _isOnline && _activeRide == null && !_popupShown) {

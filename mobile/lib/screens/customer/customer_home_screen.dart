@@ -5,10 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_strings.dart';
 import '../../models/village_model.dart';
-import '../../models/saathi_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/village_service.dart';
-import '../../services/saathi_service.dart';
 import '../../services/settings_service.dart';
 import '../../utils/fare_calculator.dart';
 import '../../widgets/village_selector_sheet.dart';
@@ -23,30 +21,19 @@ class CustomerHomeScreen extends StatefulWidget {
 }
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen>
-    with SingleTickerProviderStateMixin {
+    {
   List<VillageModel> _villages = [];
   VillageModel? _pickupVillage;
   VillageModel? _destinationVillage;
-  List<SaathiModel> _availableSaathis = [];
   List<FavouriteRoute> _favouriteRoutes = [];
   Position? _myPosition;
   bool _loading = false;
-  bool _searching = false;
   String _userName = '';
   Map<String, dynamic> _settings = {};
-  late AnimationController _pulseController;
-  late Animation<double> _pulse;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 1.0, end: 1.03).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
     _init();
   }
 
@@ -102,27 +89,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     }
   }
 
-  Future<void> _searchSaathis() async {
+  void _bookRide() {
     if (_pickupVillage == null || _destinationVillage == null) return;
-    setState(() { _searching = true; });
-    final docs = await SaathiService.getAvailableSaathis();
-    final saathis = docs.map((d) => SaathiModel.fromFirestore(d)).toList();
-    if (mounted) {
-      setState(() {
-        _availableSaathis = saathis;
-        _searching = false;
-      });
-    }
-  }
-
-  double _distanceTo(SaathiModel saathi) {
-    if (_pickupVillage == null || saathi.position == null) return 0;
-    final geoPoint = saathi.position!['geopoint'];
-    if (geoPoint == null) return 0;
-    return Geolocator.distanceBetween(
-      _pickupVillage!.lat, _pickupVillage!.lng,
-      geoPoint.latitude as double, geoPoint.longitude as double,
-    );
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => RideRequestScreen(
+        pickupVillage: _pickupVillage!,
+        destinationVillage: _destinationVillage!,
+      ),
+    ));
   }
 
   double get _estimatedFare {
@@ -136,28 +110,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     return VillageService.distanceBetween(_pickupVillage!, _destinationVillage!) / 1000;
   }
 
-  void _bookSaathi(SaathiModel saathi) {
-    if (_pickupVillage == null || _destinationVillage == null) return;
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => RideRequestScreen(
-        pickupVillage: _pickupVillage!,
-        destinationVillage: _destinationVillage!,
-        saathi: saathi,
-      ),
-    ));
-  }
-
   @override
   void dispose() {
-    _pulseController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final sortedSaathis = List<SaathiModel>.from(_availableSaathis)
-      ..sort((a, b) => _distanceTo(a).compareTo(_distanceTo(b)));
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       body: CustomScrollView(
@@ -407,83 +366,35 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
                     const SizedBox(height: 12),
                   ],
 
-                  // Find Saathi button
-                  ScaleTransition(
-                    scale: _searching ? _pulse : const AlwaysStoppedAnimation(1.0),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryGreen,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          elevation: 3,
-                          shadowColor: AppColors.primaryGreen.withAlpha(80),
-                        ),
-                        icon: _searching
-                            ? const SizedBox(
-                                width: 18, height: 18,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.search, color: Colors.white),
-                        label: Text(
-                          _searching
-                              ? 'શોધી રહ્યા છીએ... / Searching...'
-                              : AppStrings.findSaathi,
-                          style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
-                        ),
-                        onPressed: (_pickupVillage != null &&
-                                _destinationVillage != null &&
-                                !_searching)
-                            ? _searchSaathis
-                            : null,
+                  // Book Ride button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryGreen,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        elevation: 3,
+                        shadowColor: AppColors.primaryGreen.withAlpha(80),
                       ),
+                      icon: const Icon(Icons.electric_rickshaw,
+                          color: Colors.white, size: 22),
+                      label: Text(
+                        _destinationVillage == null
+                            ? 'ગામ પસંદ કરો / Select Destination'
+                            : 'Ride Book કરો / Book Ride Now',
+                        style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                      onPressed: (_pickupVillage != null &&
+                              _destinationVillage != null)
+                          ? _bookRide
+                          : null,
                     ),
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Results
-                  if (_availableSaathis.isNotEmpty) ...[
-                    Row(children: [
-                      Container(
-                        width: 8, height: 8,
-                        decoration: const BoxDecoration(
-                            color: AppColors.success, shape: BoxShape.circle),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${_availableSaathis.length} સાથી ઉપલબ્ધ',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: AppColors.textDark),
-                      ),
-                    ]),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${_availableSaathis.length} Saathi Available nearby',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
-                    ),
-                    const SizedBox(height: 10),
-                    ...sortedSaathis.asMap().entries.map(
-                      (e) => _SaathiCard(
-                        saathi: e.value,
-                        distanceMeters: _distanceTo(e.value),
-                        isPreferred: e.key == 0,
-                        onBook: () => _bookSaathi(e.value),
-                      ),
-                    ),
-                  ] else if (!_loading && !_searching &&
-                      _availableSaathis.isEmpty &&
-                      _destinationVillage != null) ...[
-                    const SizedBox(height: 20),
-                    _buildEmptyState(),
-                  ],
 
                   const SizedBox(height: 20),
                 ],
@@ -566,161 +477,4 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(30),
-        child: Column(children: [
-          Icon(Icons.directions_bike_outlined,
-              size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          const Text('કોઈ સાથી ઉપલબ્ધ નથી',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500,
-                  color: AppColors.textGrey)),
-          const Text('No Saathi available right now',
-              style: TextStyle(color: AppColors.textLight)),
-          const SizedBox(height: 8),
-          const Text('થોડીવાર રાહ જુઓ અને ફરી પ્રયાસ કરો',
-              style: TextStyle(fontSize: 13, color: AppColors.textLight),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.refresh),
-            label: const Text('ફરી શોધો / Search Again'),
-            onPressed: _searchSaathis,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primaryGreen,
-              side: const BorderSide(color: AppColors.primaryGreen),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _SaathiCard extends StatelessWidget {
-  final SaathiModel saathi;
-  final double distanceMeters;
-  final bool isPreferred;
-  final VoidCallback onBook;
-
-  const _SaathiCard({
-    required this.saathi,
-    required this.distanceMeters,
-    required this.isPreferred,
-    required this.onBook,
-  });
-
-  String get _distanceText {
-    if (distanceMeters < 1000) return '${distanceMeters.toStringAsFixed(0)} m';
-    return '${(distanceMeters / 1000).toStringAsFixed(1)} km';
-  }
-
-  int get _etaMinutes =>
-      (distanceMeters / 1000 / 25 * 60).round().clamp(1, 60);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: isPreferred
-            ? Border.all(color: AppColors.primaryGreen, width: 1.5)
-            : null,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withAlpha(15),
-              blurRadius: 10, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(children: [
-          Row(children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: AppColors.bgGreen,
-              child: Text(
-                saathi.name.isNotEmpty ? saathi.name[0].toUpperCase() : 'S',
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold,
-                    color: AppColors.primaryGreen),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Text(saathi.name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 15)),
-                  if (isPreferred) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryGreen,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text('Nearest',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ]),
-                Text('${saathi.vehicleType} · ${saathi.vehicleNumber}',
-                    style: const TextStyle(
-                        color: AppColors.textGrey, fontSize: 12)),
-              ],
-            )),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Row(children: [
-                const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
-                const SizedBox(width: 2),
-                Text(saathi.rating.toStringAsFixed(1),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13)),
-              ]),
-              Text('~$_etaMinutes min',
-                  style: const TextStyle(
-                      fontSize: 11, color: AppColors.textGrey)),
-            ]),
-          ]),
-          const SizedBox(height: 10),
-          Row(children: [
-            const Icon(Icons.near_me_outlined,
-                size: 14, color: AppColors.textGrey),
-            const SizedBox(width: 4),
-            Text(_distanceText,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textGrey)),
-            const Spacer(),
-            SizedBox(
-              height: 36,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryGreen,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                ),
-                onPressed: onBook,
-                child: const Text('Book',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ]),
-        ]),
-      ),
-    );
-  }
 }

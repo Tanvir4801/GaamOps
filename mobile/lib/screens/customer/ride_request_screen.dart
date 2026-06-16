@@ -16,13 +16,13 @@ import 'payment_sheet.dart';
 class RideRequestScreen extends StatefulWidget {
   final VillageModel pickupVillage;
   final VillageModel destinationVillage;
-  final SaathiModel saathi;
+  final SaathiModel? saathi;
 
   const RideRequestScreen({
     super.key,
     required this.pickupVillage,
     required this.destinationVillage,
-    required this.saathi,
+    this.saathi,
   });
 
   @override
@@ -147,7 +147,7 @@ class _RideRequestScreenState extends State<RideRequestScreen>
       destinationLng: widget.destinationVillage.lng,
       fare: b.totalFare,
       distance: dist / 1000,
-      targetSaathiId: widget.saathi.uid,
+      targetSaathiId: widget.saathi?.uid ?? '',
       paymentMethod:
           method == PaymentMethod.upi ? RideModel.paymentUpi : RideModel.paymentCash,
       baseFare: b.baseFare,
@@ -198,7 +198,10 @@ class _RideRequestScreenState extends State<RideRequestScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SaathiCard(saathi: widget.saathi),
+                  if (widget.saathi != null)
+                    _SaathiCard(saathi: widget.saathi!)
+                  else
+                    _SearchingInfoCard(),
                   const SizedBox(height: 12),
                   _RouteCard(
                     pickup: widget.pickupVillage,
@@ -273,6 +276,67 @@ class _RideRequestScreenState extends State<RideRequestScreen>
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _SearchingInfoCard extends StatelessWidget {
+  const _SearchingInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.bgGreen,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryGreen.withAlpha(60)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primaryGreen.withAlpha(30),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.electric_rickshaw,
+                color: AppColors.primaryGreen, size: 24),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('GaamRide Saathi',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15,
+                        color: AppColors.textDark)),
+                Text('Confirm & pay — nearest saathi will accept',
+                    style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.primaryGreen.withAlpha(20),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.search, color: AppColors.primaryGreen, size: 14),
+                SizedBox(width: 4),
+                Text('Auto-match',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 12,
+                        color: AppColors.primaryGreen)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
