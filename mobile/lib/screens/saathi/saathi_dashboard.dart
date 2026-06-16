@@ -149,6 +149,8 @@ class _SaathiDashboardState extends State<SaathiDashboard>
 
   Future<void> _acceptRide(RideModel ride) async {
     if (_uid == null || _saathi == null) return;
+    // Set immediately — prevents race-condition popup during the async gap
+    setState(() => _activeRide = ride);
     await RideService.acceptRide(
       rideId: ride.rideId,
       saathiId: _uid!,
@@ -156,14 +158,26 @@ class _SaathiDashboardState extends State<SaathiDashboard>
       saathiPhone: _saathi!.phone,
     );
     if (mounted) {
-      setState(() => _activeRide = ride);
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => SaathiRideScreen(
           ride: ride,
-          onComplete: () => setState(() => _activeRide = null),
+          onComplete: _onRideComplete,
         ),
       ));
     }
+  }
+
+  void _onRideComplete() {
+    // Mark as busy briefly so popup doesn't fire the instant we land on dashboard
+    _popupShown = true;
+    setState(() => _activeRide = null);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _popupShown = false);
+        // Re-subscribe so the stream fires immediately with current Firestore data
+        _listenForRides();
+      }
+    });
   }
 
   @override

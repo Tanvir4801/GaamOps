@@ -461,7 +461,7 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
                     color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2)),
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: isArriving ? 8 : 14),
 
               // Customer info row
               Row(children: [
@@ -517,7 +517,7 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
                 ),
               ]),
 
-              const SizedBox(height: 12),
+              SizedBox(height: isArriving ? 8 : 12),
 
               // Route row
               Container(
@@ -561,7 +561,7 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
                 ]),
               ),
 
-              const SizedBox(height: 14),
+              SizedBox(height: isArriving ? 8 : 14),
 
               // Status-specific actions
               if (_isLoading)
@@ -599,7 +599,7 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
                 _actionButton(
                   label: 'Start Ride · ચાલુ',
                   icon: Icons.play_circle,
