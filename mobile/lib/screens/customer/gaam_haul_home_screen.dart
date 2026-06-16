@@ -107,7 +107,9 @@ class _GaamHaulHomeScreenState extends State<GaamHaulHomeScreen> {
     if (!_canSearch) return;
     setState(() { _searching = true; _vehicles = []; });
     try {
-      final docs = await HaulService.getAvailableVehicles();
+      final docs = await HaulService.getAvailableVehicles(
+        vehicleType: _selectedVehicleType,
+      );
       final vehicles = docs.map((d) => HaulVehicleModel.fromFirestore(d)).toList();
       if (mounted) setState(() { _vehicles = vehicles; _searching = false; });
     } catch (e) {

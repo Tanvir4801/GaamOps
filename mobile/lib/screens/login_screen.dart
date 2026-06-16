@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../constants/app_colors.dart';
+import '../services/auth_service.dart';
 import 'otp_screen.dart';
+import 'auth/customer_registration_screen.dart';
+import 'auth/saathi_registration_screen.dart';
+import 'customer/customer_main_shell.dart';
+import 'saathi/saathi_main_shell.dart';
 
 class LoginScreen extends StatefulWidget {
   final String role;
@@ -16,6 +22,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _phoneCtrl = TextEditingController();
   bool _isLoading = false;
+  bool _googleLoading = false;
   String? _error;
 
   bool get _isSaathi => widget.role == 'saathi';
@@ -90,6 +97,57 @@ class _LoginScreenState extends State<LoginScreen> {
       },
       codeAutoRetrievalTimeout: (_) {},
     );
+  }
+
+  void _goRemoveAll(Widget screen) {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+      (_) => false,
+    );
+  }
+
+  Future<void> _googleSignIn() async {
+    setState(() { _googleLoading = true; _error = null; });
+    try {
+      final userCred = await AuthService.googleSignIn();
+      if (userCred == null) {
+        if (mounted) setState(() => _googleLoading = false);
+        return;
+      }
+      final uid = userCred.user!.uid;
+      final email = userCred.user!.email ?? '';
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(uid).get();
+
+      if (!mounted) return;
+
+      if (!doc.exists) {
+        _goRemoveAll(CustomerRegistrationScreen(uid: uid, phone: email));
+        return;
+      }
+
+      final savedRole = (doc.data()!['role'] as String?) ?? 'customer';
+      if (savedRole == 'saathi') {
+        final saathiDoc = await FirebaseFirestore.instance
+            .collection('saathis').doc(uid).get();
+        if (!saathiDoc.exists) {
+          _goRemoveAll(SaathiRegistrationScreen(uid: uid, phone: email));
+        } else {
+          _goRemoveAll(const SaathiMainShell());
+        }
+      } else {
+        _goRemoveAll(const CustomerMainShell());
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _googleLoading = false;
+          _error = 'Google sign-in failed. Please try again.';
+        });
+      }
+    }
   }
 
   @override
@@ -334,7 +392,59 @@ class _LoginScreenState extends State<LoginScreen> {
                     Expanded(child: Divider(color: Colors.grey.shade200)),
                   ]),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
+
+                  // Google Sign-In button — customers only
+                  if (!_isSaathi) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.grey.shade300, width: 1.5),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          backgroundColor: Colors.white,
+                          elevation: 0,
+                        ),
+                        onPressed: (_googleLoading || _isLoading) ? null : _googleSignIn,
+                        child: _googleLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: AppColors.primaryGreen),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.asset(
+                                    'assets/images/google_logo.png',
+                                    width: 22,
+                                    height: 22,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.g_mobiledata,
+                                      size: 26,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Google સાથે ચાલુ કરો / Continue with Google',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF3C4043),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ] else ...[
+                    const SizedBox(height: 4),
+                  ],
 
                   Center(
                     child: TextButton.icon(

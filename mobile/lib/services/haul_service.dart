@@ -100,18 +100,24 @@ class HaulService {
     return _bookings.doc(bookingId).snapshots();
   }
 
-  static Stream<QuerySnapshot> watchIncomingBookings() {
+  // Saathi only sees bookings targeted at them (by vehicleOwnerId)
+  static Stream<QuerySnapshot> watchIncomingBookings(String ownerId) {
     return _bookings
+        .where('vehicleOwnerId', isEqualTo: ownerId)
         .where('status', isEqualTo: HaulBookingModel.searching)
-        .orderBy('createdAt', descending: true)
-        .limit(10)
+        .limit(5)
         .snapshots();
   }
 
-  static Future<List<DocumentSnapshot>> getAvailableVehicles() async {
-    final snap = await _vehicles
-        .where('isAvailable', isEqualTo: true)
-        .get();
+  // Fetch available vehicles filtered by type
+  static Future<List<DocumentSnapshot>> getAvailableVehicles({
+    String? vehicleType,
+  }) async {
+    Query query = _vehicles.where('isAvailable', isEqualTo: true);
+    if (vehicleType != null && vehicleType.isNotEmpty) {
+      query = query.where('vehicleType', isEqualTo: vehicleType);
+    }
+    final snap = await query.get();
     return snap.docs;
   }
 

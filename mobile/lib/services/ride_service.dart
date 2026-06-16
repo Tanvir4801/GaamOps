@@ -17,6 +17,7 @@ class RideService {
     required double destinationLng,
     required double fare,
     required double distance,
+    required String targetSaathiId,
     String paymentMethod = RideModel.paymentCash,
     double baseFare = 0,
     double distanceCharge = 0,
@@ -36,6 +37,7 @@ class RideService {
       'saathiId': '',
       'saathiName': '',
       'saathiPhone': '',
+      'targetSaathiId': targetSaathiId,
       'pickupVillage': pickupVillage,
       'pickupLat': pickupLat,
       'pickupLng': pickupLng,
@@ -167,11 +169,12 @@ class RideService {
     return _rides.doc(rideId).snapshots();
   }
 
-  static Stream<QuerySnapshot> watchIncomingRides() {
+  // Targeted: only rides assigned to this specific saathi
+  static Stream<QuerySnapshot> watchIncomingRides(String saathiId) {
     return _rides
+        .where('targetSaathiId', isEqualTo: saathiId)
         .where('status', isEqualTo: RideModel.searching)
-        .orderBy('createdAt', descending: true)
-        .limit(10)
+        .limit(5)
         .snapshots();
   }
 
@@ -210,11 +213,9 @@ class RideService {
     double monthEarnings = 0;
     int todayRides = 0;
 
-    // 7-day daily breakdown: index 0 = 6 days ago, index 6 = today
     final List<double> dailyEarnings = List.filled(7, 0.0);
     final List<int> dailyRides = List.filled(7, 0);
 
-    // Collect recent rides for the trips list (sorted by completedAt desc)
     final allRides = snap.docs
         .map((d) => d.data() as Map<String, dynamic>)
         .where((d) => d['completedAt'] != null)
@@ -236,7 +237,6 @@ class RideService {
         todayRides++;
       }
 
-      // Daily breakdown for last 7 days
       if (completedAt.isAfter(sevenDaysAgo.subtract(const Duration(seconds: 1)))) {
         final completedDay = DateTime(completedAt.year, completedAt.month, completedAt.day);
         final daysDiff = todayStart.difference(completedDay).inDays;

@@ -147,6 +147,7 @@ class _RideRequestScreenState extends State<RideRequestScreen>
       destinationLng: widget.destinationVillage.lng,
       fare: b.totalFare,
       distance: dist / 1000,
+      targetSaathiId: widget.saathi.uid,
       paymentMethod:
           method == PaymentMethod.upi ? RideModel.paymentUpi : RideModel.paymentCash,
       baseFare: b.baseFare,

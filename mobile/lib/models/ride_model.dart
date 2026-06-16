@@ -8,6 +8,7 @@ class RideModel {
   final String saathiId;
   final String saathiName;
   final String saathiPhone;
+  final String targetSaathiId;
   final String pickupVillage;
   final double pickupLat;
   final double pickupLng;
@@ -58,6 +59,7 @@ class RideModel {
     required this.saathiId,
     required this.saathiName,
     required this.saathiPhone,
+    this.targetSaathiId = '',
     required this.pickupVillage,
     required this.pickupLat,
     required this.pickupLng,
@@ -99,6 +101,7 @@ class RideModel {
       saathiId: d['saathiId'] ?? '',
       saathiName: d['saathiName'] ?? '',
       saathiPhone: d['saathiPhone'] ?? '',
+      targetSaathiId: d['targetSaathiId'] ?? '',
       pickupVillage: d['pickupVillage'] ?? '',
       pickupLat: (d['pickupLat'] ?? 0).toDouble(),
       pickupLng: (d['pickupLng'] ?? 0).toDouble(),
@@ -139,6 +142,7 @@ class RideModel {
         'saathiId': saathiId,
         'saathiName': saathiName,
         'saathiPhone': saathiPhone,
+        'targetSaathiId': targetSaathiId,
         'pickupVillage': pickupVillage,
         'pickupLat': pickupLat,
         'pickupLng': pickupLng,
