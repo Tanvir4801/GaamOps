@@ -108,6 +108,22 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                   ),
 
+                  const SizedBox(height: 14),
+
+                  // Haul Owner button
+                  _WelcomeButton(
+                    icon: Icons.local_shipping,
+                    color: const Color(0xFF5D4037),
+                    titleGu: 'વાહન માલિક — GaamHaul',
+                    titleEn: 'Vehicle Owner — Rent your truck/tractor',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              const LoginScreen(role: 'haul_owner')),
+                    ),
+                  ),
+
                   const Spacer(),
 
                   Row(

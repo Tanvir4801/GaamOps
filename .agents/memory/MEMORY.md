@@ -10,3 +10,4 @@
 - [Wallet Firestore path](wallet-path.md) — GaamCash: users/{uid}/wallet/balance (doc with `balance` field) + subcollection transactions. Fallback: gaamCash field on user doc. Always init wallet doc on first load.
 - [Admin revenue haul commission](revenue-commission.md) — use `h.appCommission ?? h.commission ?? 0`; never hardcode 75 as default — that inflates revenue numbers.
 - [Layout pattern for auth screens](flutter-layout-auth.md) — all auth screens (login, welcome) use Column not Stack+Positioned; SingleChildScrollView wraps Column for keyboard safety.
+- [GaamHaul architecture](gaamhaul-arch.md) — vehicle rental (NOT ride-hailing); haul_owner role; HaulOwnerShell parallel to SaathiMainShell; status flow searching→accepted→started→completed; startedAt set on startBooking; vehicleEmoji is class getter on HaulBookingModel (not extension)

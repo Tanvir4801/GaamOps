@@ -7,6 +7,7 @@ import 'auth/customer_registration_screen.dart';
 import 'auth/saathi_registration_screen.dart';
 import 'saathi/saathi_main_shell.dart';
 import 'customer/customer_main_shell.dart';
+import 'haul_owner/haul_owner_shell.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phone;
@@ -165,6 +166,22 @@ class _OtpScreenState extends State<OtpScreen> {
         // Brand new user — go to registration based on login role
         if (loginRole == 'saathi') {
           _goRemoveAll(SaathiRegistrationScreen(uid: uid, phone: widget.phone));
+        } else if (loginRole == 'haul_owner') {
+          // Haul owners must be pre-created by admin
+          if (mounted) {
+            await FirebaseAuth.instance.signOut();
+            setState(() => _loading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'GaamHaul owner not found.\n'
+                  'Please contact admin to register your vehicle.',
+                ),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 5),
+              ),
+            );
+          }
         } else {
           _goRemoveAll(CustomerRegistrationScreen(uid: uid, phone: widget.phone));
         }
@@ -177,6 +194,8 @@ class _OtpScreenState extends State<OtpScreen> {
       if (savedRole == loginRole) {
         if (savedRole == 'saathi') {
           _goRemoveAll(const SaathiMainShell());
+        } else if (savedRole == 'haul_owner') {
+          _goRemoveAll(const HaulOwnerShell());
         } else {
           _goRemoveAll(const CustomerMainShell());
         }

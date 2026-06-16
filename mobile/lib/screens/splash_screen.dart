@@ -8,6 +8,7 @@ import 'welcome_screen.dart';
 import 'maintenance_screen.dart';
 import 'customer/customer_main_shell.dart';
 import 'saathi/saathi_main_shell.dart';
+import 'haul_owner/haul_owner_shell.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -90,6 +91,14 @@ Future<void> _navigate() async {
         context,
         MaterialPageRoute(
           builder: (_) => const SaathiMainShell(),
+        ),
+        (_) => false,
+      );
+    } else if (userModel.role == 'haul_owner') {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const HaulOwnerShell(),
         ),
         (_) => false,
       );

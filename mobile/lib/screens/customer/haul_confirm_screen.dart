@@ -54,6 +54,7 @@ class _HaulConfirmScreenState extends State<HaulConfirmScreen> {
       ownerName: widget.vehicle.ownerName,
       ownerPhone: widget.vehicle.phone,
       vehicleType: widget.vehicle.vehicleType,
+      vehicleNumber: widget.vehicle.vehicleNumber,
       duration: widget.duration,
       durationHours: _ownerEarnings / widget.vehicle.ratePerHour,
       loadDescription: widget.loadDescription,

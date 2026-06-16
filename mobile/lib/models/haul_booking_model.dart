@@ -9,8 +9,10 @@ class HaulBookingModel {
   final String ownerName;
   final String ownerPhone;
   final String vehicleType;
+  final String vehicleNumber;
   final String duration;
   final double durationHours;
+  final double ratePerHour;
   final String loadDescription;
   final String pickupVillage;
   final double pickupLat;
@@ -23,16 +25,17 @@ class HaulBookingModel {
   final String cancelReason;
   final DateTime? createdAt;
   final DateTime? acceptedAt;
+  final DateTime? startedAt;
   final DateTime? completedAt;
 
   static const searching = 'searching';
-  static const accepted = 'accepted';
-  static const started = 'started';
+  static const accepted  = 'accepted';
+  static const started   = 'started';
   static const completed = 'completed';
   static const cancelled = 'cancelled';
 
-  static const duration1h = '1h';
-  static const duration2h = '2h';
+  static const duration1h      = '1h';
+  static const duration2h      = '2h';
   static const durationHalfDay = 'half_day';
   static const durationFullDay = 'full_day';
 
@@ -45,8 +48,10 @@ class HaulBookingModel {
     required this.ownerName,
     required this.ownerPhone,
     required this.vehicleType,
+    this.vehicleNumber = '',
     required this.duration,
     required this.durationHours,
+    this.ratePerHour = 0,
     required this.loadDescription,
     required this.pickupVillage,
     required this.pickupLat,
@@ -59,60 +64,84 @@ class HaulBookingModel {
     this.cancelReason = '',
     this.createdAt,
     this.acceptedAt,
+    this.startedAt,
     this.completedAt,
   });
 
   factory HaulBookingModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return HaulBookingModel(
-      bookingId: d['bookingId'] ?? doc.id,
-      customerId: d['customerId'] ?? '',
-      customerName: d['customerName'] ?? '',
-      customerPhone: d['customerPhone'] ?? '',
+      bookingId:      d['bookingId'] ?? doc.id,
+      customerId:     d['customerId'] ?? '',
+      customerName:   d['customerName'] ?? '',
+      customerPhone:  d['customerPhone'] ?? '',
       vehicleOwnerId: d['vehicleOwnerId'] ?? '',
-      ownerName: d['ownerName'] ?? '',
-      ownerPhone: d['ownerPhone'] ?? '',
-      vehicleType: d['vehicleType'] ?? '',
-      duration: d['duration'] ?? '1h',
-      durationHours: (d['durationHours'] ?? 1).toDouble(),
+      ownerName:      d['ownerName'] ?? '',
+      ownerPhone:     d['ownerPhone'] ?? '',
+      vehicleType:    d['vehicleType'] ?? '',
+      vehicleNumber:  d['vehicleNumber'] ?? '',
+      duration:       d['duration'] ?? '1h',
+      durationHours:  (d['durationHours'] ?? 1).toDouble(),
+      ratePerHour:    (d['ratePerHour'] ?? 0).toDouble(),
       loadDescription: d['loadDescription'] ?? '',
-      pickupVillage: d['pickupVillage'] ?? '',
-      pickupLat: (d['pickupLat'] ?? 0).toDouble(),
-      pickupLng: (d['pickupLng'] ?? 0).toDouble(),
-      status: d['status'] ?? searching,
-      appCommission: (d['appCommission'] ?? 75).toDouble(),
-      ownerEarnings: (d['ownerEarnings'] ?? 0).toDouble(),
-      ownerLat: (d['ownerLat'] ?? 0).toDouble(),
-      ownerLng: (d['ownerLng'] ?? 0).toDouble(),
-      cancelReason: d['cancelReason'] ?? '',
-      createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
-      acceptedAt: (d['acceptedAt'] as Timestamp?)?.toDate(),
-      completedAt: (d['completedAt'] as Timestamp?)?.toDate(),
+      pickupVillage:  d['pickupVillage'] ?? '',
+      pickupLat:      (d['pickupLat'] ?? 0).toDouble(),
+      pickupLng:      (d['pickupLng'] ?? 0).toDouble(),
+      status:         d['status'] ?? searching,
+      appCommission:  (d['appCommission'] ?? 75).toDouble(),
+      ownerEarnings:  (d['ownerEarnings'] ?? 0).toDouble(),
+      ownerLat:       (d['ownerLat'] ?? 0).toDouble(),
+      ownerLng:       (d['ownerLng'] ?? 0).toDouble(),
+      cancelReason:   d['cancelReason'] ?? '',
+      createdAt:      (d['createdAt']   as Timestamp?)?.toDate(),
+      acceptedAt:     (d['acceptedAt']  as Timestamp?)?.toDate(),
+      startedAt:      (d['startedAt']   as Timestamp?)?.toDate(),
+      completedAt:    (d['completedAt'] as Timestamp?)?.toDate(),
     );
   }
-     String get vehicleTypeLabel {
-  switch (vehicleType.toLowerCase()) {
-    case 'tractor':
-      return 'Tractor';
-    case 'tempo':
-      return 'Tempo';
-    case 'pickup':
-      return 'Pickup';
-    case 'truck':
-      return 'Truck';
-    default:
-      return vehicleType;
+
+  String get vehicleTypeLabel {
+    switch (vehicleType.toLowerCase()) {
+      case 'tractor':   return 'Tractor';
+      case 'tempo':     return 'Tempo';
+      case 'pickup':    return 'Pickup Truck';
+      case 'truck_407': return '407 Truck';
+      case 'mini_tempo': return 'Mini Tempo';
+      default: return vehicleType;
+    }
   }
-}
+
+  String get vehicleEmoji {
+    switch (vehicleType.toLowerCase()) {
+      case 'tractor':    return '🚜';
+      case 'pickup':     return '🛻';
+      case 'truck_407':  return '🚚';
+      default:           return '🚛';
+    }
+  }
 
   String get durationLabel {
     switch (duration) {
-      case '1h': return '1 Hour';
-      case '2h': return '2 Hours';
+      case '1h':       return '1 Hour';
+      case '2h':       return '2 Hours';
       case 'half_day': return 'Half Day (4h)';
       case 'full_day': return 'Full Day (8h)';
-      default: return duration;
+      default:         return duration;
     }
   }
+
+  Duration get totalBookedDuration =>
+      Duration(minutes: (durationHours * 60).round());
+
+  Duration get elapsed {
+    if (startedAt == null) return Duration.zero;
+    final e = DateTime.now().difference(startedAt!);
+    return e.isNegative ? Duration.zero : e;
+  }
+
+  double get elapsedFraction {
+    final total = totalBookedDuration.inSeconds;
+    if (total <= 0) return 0;
+    return (elapsed.inSeconds / total).clamp(0.0, 1.0);
+  }
 }
-  
