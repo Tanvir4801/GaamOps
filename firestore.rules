@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // GaamRide — allow any authenticated user (admin web + Flutter app)
+    // to read and write all documents.
+    // For production hardening, scope Flutter app reads to the user's own uid.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
