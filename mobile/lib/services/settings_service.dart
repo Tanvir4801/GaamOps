@@ -1,39 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/app_settings_model.dart';
 
 class SettingsService {
   static AppSettingsModel? _cached;
 
   static Future<AppSettingsModel> getSettings() async {
-  print('SETTINGS 1');
-
-  if (_cached != null) {
-    print('SETTINGS CACHE');
+    if (_cached != null) return _cached!;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('app_settings')
+          .doc('config')
+          .get();
+      if (doc.exists && doc.data() != null) {
+        _cached = AppSettingsModel.fromFirestore(doc.data()!);
+        return _cached!;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Settings load failed, using defaults: $e');
+    }
+    _cached = AppSettingsModel.defaults();
     return _cached!;
   }
-
-  try {
-    print('SETTINGS 2');
-
-    final doc = await FirebaseFirestore.instance
-        .collection('app_settings')
-        .doc('config')
-        .get();
-
-    print('SETTINGS 3 exists=${doc.exists}');
-
-    if (doc.exists) {
-      _cached = AppSettingsModel.fromFirestore(doc.data()!);
-      print('SETTINGS 4');
-      return _cached!;
-    }
-  } catch (e) {
-    print('SETTINGS ERROR: $e');
-  }
-
-  print('SETTINGS DEFAULT');
-  return AppSettingsModel.defaults();
-}
 
   static void clearCache() => _cached = null;
 
@@ -42,8 +30,16 @@ class SettingsService {
         .collection('app_settings')
         .doc('config')
         .snapshots()
-        .map((doc) => doc.exists
+        .map((doc) => doc.exists && doc.data() != null
             ? AppSettingsModel.fromFirestore(doc.data()!)
             : AppSettingsModel.defaults());
+  }
+
+  static Stream<bool> maintenanceModeStream() {
+    return FirebaseFirestore.instance
+        .collection('app_settings')
+        .doc('config')
+        .snapshots()
+        .map((snap) => snap.data()?['maintenanceMode'] ?? false);
   }
 }

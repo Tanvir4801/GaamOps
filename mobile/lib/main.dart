@@ -7,41 +7,9 @@ import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  print('STEP 1');
-
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
-  print('STEP 2');
-
-  runApp(const GaamRideApp());
-
-  WidgetsFlutterBinding.ensureInitialized();
-
-  print('STEP 1');
-
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  print('STEP 2');
-
-
-  print('STEP 3');
-
-
-  print('STEP 4');
-
-  runApp(const GaamRideApp());
-
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  //await NotificationService.initialize();
-  //await MigrationService.runMigrations();
-
   runApp(const GaamRideApp());
 }
 

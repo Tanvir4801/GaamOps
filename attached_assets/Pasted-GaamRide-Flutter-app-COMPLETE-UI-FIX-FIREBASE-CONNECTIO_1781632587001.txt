@@ -1,0 +1,1519 @@
+GaamRide Flutter app — COMPLETE UI FIX + FIREBASE CONNECTION CHECK
++ ALL BUGS FIX. The app has multiple critical issues to fix.
+
+===================================================
+CRITICAL BUG 1 — LOGIN SCREEN BLANK WHITE
+===================================================
+
+From screenshots: Login screen shows only the top green/orange
+gradient header card, but everything below is WHITE/BLANK.
+The phone input field and OTP button are not visible.
+
+ROOT CAUSE: The white bottom section is using Positioned widget
+with top: 260 which pushes content off screen on some devices.
+Also Stack layout is broken.
+
+FIX — Rewrite login_screen.dart completely:
+
+```dart
+// lib/screens/auth/login_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../customer/customer_main_shell.dart';
+import '../saathi/saathi_main_shell.dart';
+import 'otp_screen.dart';
+import 'customer_registration_screen.dart';
+import 'saathi_registration_screen.dart';
+import '../../constants/app_colors.dart';
+
+class LoginScreen extends StatefulWidget {
+  final String role;
+  const LoginScreen({super.key, required this.role});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _phoneCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  bool get _isSaathi => widget.role == 'saathi';
+  Color get _primaryColor =>
+      _isSaathi ? AppColors.primaryOrange : AppColors.primaryGreen;
+  Color get _darkColor =>
+      _isSaathi ? const Color(0xFFBF360C) : const Color(0xFF1B5E20);
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendOTP() async {
+    final phone = _phoneCtrl.text.trim();
+    if (phone.length != 10) {
+      _showSnack('10 અંકનો નંબર દાખલ કરો');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: '+91$phone',
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        final result =
+            await FirebaseAuth.instance.signInWithCredential(credential);
+        await _handlePostLogin(result.user!.uid);
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        setState(() => _isLoading = false);
+        _showSnack('Error: ${e.message ?? 'OTP failed'}');
+      },
+      codeSent: (String verificationId, int? resendToken) {
+        setState(() => _isLoading = false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OTPScreen(
+              phone: phone,
+              verificationId: verificationId,
+              role: widget.role,
+            ),
+          ),
+        );
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {},
+    );
+  }
+
+  Future<void> _googleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final result =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      await _handlePostLogin(result.user!.uid);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showSnack('Google login failed');
+    }
+  }
+
+  Future<void> _handlePostLogin(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      if (!mounted) return;
+
+      if (!doc.exists) {
+        if (_isSaathi) {
+          _goRemoveAll(const SaathiRegistrationScreen());
+        } else {
+          _goRemoveAll(const CustomerRegistrationScreen());
+        }
+        return;
+      }
+
+      final data = doc.data()!;
+
+      if (data['isBlocked'] == true) {
+        await FirebaseAuth.instance.signOut();
+        _showSnack('તમારું account block છે. Admin નો સંપર્ક કરો.');
+        return;
+      }
+
+      String role = (data['role'] as String? ?? 'customer');
+      if (role.contains('|')) {
+        role = role.contains('saathi') ? 'saathi' : 'customer';
+      }
+
+      if (role == 'saathi') {
+        _goRemoveAll(const SaathiMainShell());
+      } else {
+        _goRemoveAll(const CustomerMainShell());
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showSnack('Login error: $e');
+    }
+  }
+
+  void _goRemoveAll(Widget screen) {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+      (route) => false,
+    );
+  }
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      // KEY FIX: resizeToAvoidBottomInset prevents keyboard pushing layout
+      resizeToAvoidBottomInset: true,
+      backgroundColor: Colors.white,
+      body: SingleChildScrollView(
+        // KEY FIX: SingleChildScrollView as root — not Stack+Positioned
+        child: Column(
+          children: [
+            // ── TOP GRADIENT HEADER ──────────────────
+            Container(
+              width: double.infinity,
+              height: size.height * 0.38,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [_darkColor, _primaryColor],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(40),
+                  bottomRight: Radius.circular(40),
+                ),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Back button
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Icon
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isSaathi
+                              ? Icons.two_wheeler
+                              : Icons.person_outline,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _isSaathi ? 'Saathi Login' : 'Customer Login',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isSaathi
+                            ? 'Earn by Driving'
+                            : 'Book rides instantly',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // ── BOTTOM WHITE CONTENT ─────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Phone label
+                    Text(
+                      'મોબાઈલ નંબર / Phone Number',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: _primaryColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Phone input
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.grey.shade200,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 18,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(16),
+                                bottomLeft: Radius.circular(16),
+                              ),
+                              border: Border(
+                                right: BorderSide(
+                                  color: Colors.grey.shade200,
+                                ),
+                              ),
+                            ),
+                            child: const Text(
+                              '+91',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _phoneCtrl,
+                              keyboardType: TextInputType.phone,
+                              maxLength: 10,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2,
+                              ),
+                              decoration: const InputDecoration(
+                                hintText: '00000 00000',
+                                hintStyle: TextStyle(
+                                  color: Color(0xFFDDDDDD),
+                                  fontSize: 20,
+                                  letterSpacing: 2,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                                border: InputBorder.none,
+                                counterText: '',
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 18,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.length != 10) {
+                                  return '10 digit number required';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+                    Text(
+                      'OTP ચકાસણી માટે વપરાશ થશે',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // Send OTP button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primaryColor,
+                          elevation: 4,
+                          shadowColor: _primaryColor.withOpacity(0.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: _isLoading ? null : _sendOTP,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text(
+                                'OTP મોકલો / Send OTP',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // OR divider
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Divider(color: Colors.grey.shade200),
+                        ),
+                        Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'અથવા / OR',
+                            style: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(color: Colors.grey.shade200),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Google Sign In
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: Colors.grey.shade200,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: _isLoading ? null : _googleSignIn,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'G',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Google સાથે ચાલુ કરો',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Help button
+                    Center(
+                      child: TextButton.icon(
+                        icon: Icon(
+                          Icons.help_outline,
+                          size: 16,
+                          color: Colors.grey.shade400,
+                        ),
+                        label: Text(
+                          'સમસ્યા છે? Help',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
+                        onPressed: () => launchUrl(
+                          Uri.parse('https://wa.me/91YOURSUPPORTNUMBER'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+===================================================
+CRITICAL BUG 2 — FIREBASE CONNECTION CHECK
+===================================================
+
+Check every screen connects to correct Firestore collection.
+Add this diagnostic service that runs on app start:
+
+```dart
+// lib/services/firebase_check_service.dart
+
+class FirebaseCheckService {
+
+  static Future<void> runChecks() async {
+    if (!kDebugMode) return;
+
+    debugPrint('\n🔍 GaamRide Firebase Connection Check\n');
+
+    await _checkCollection('users');
+    await _checkCollection('saathis');
+    await _checkCollection('rides');
+    await _checkCollection('haul_bookings');
+    await _checkCollection('villages');
+    await _checkCollection('app_settings');
+    await _checkAppSettings();
+    await _checkVillages();
+
+    debugPrint('\n✅ Firebase Check Complete\n');
+  }
+
+  static Future<void> _checkCollection(String name) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection(name)
+          .limit(1)
+          .get();
+      debugPrint(
+          '✅ $name: connected (${snap.docs.length} docs visible)');
+    } catch (e) {
+      debugPrint('❌ $name: ERROR — $e');
+    }
+  }
+
+  static Future<void> _checkAppSettings() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('app_settings')
+          .doc('config')
+          .get();
+      if (!doc.exists) {
+        debugPrint('⚠️  app_settings/config: document NOT FOUND');
+        return;
+      }
+      final d = doc.data()!;
+      debugPrint('✅ app_settings: '
+          'fare=₹${d['rideFareBase']}+₹${d['rideFarePerKm']}/km, '
+          'haul=₹${d['haulCommission']}, '
+          'maintenance=${d['maintenanceMode']}');
+    } catch (e) {
+      debugPrint('❌ app_settings: $e');
+    }
+  }
+
+  static Future<void> _checkVillages() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('villages')
+          .where('isActive', isEqualTo: true)
+          .get();
+      final names = snap.docs.map((d) => d.data()['name']).join(', ');
+      debugPrint('✅ villages: ${snap.docs.length} active — $names');
+    } catch (e) {
+      debugPrint('❌ villages: $e');
+    }
+  }
+}
+```
+
+Call in main.dart:
+```dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform);
+  if (kDebugMode) await FirebaseCheckService.runChecks();
+  runApp(const GaamRideApp());
+}
+```
+
+===================================================
+CRITICAL BUG 3 — SETTINGS SERVICE NOT READING
+===================================================
+
+The app must read fare and zone from Firestore app_settings/config
+on startup. Fix settings_service.dart:
+
+```dart
+// lib/services/settings_service.dart
+
+class AppSettings {
+  final double rideFareBase;
+  final double rideFarePerKm;
+  final double rideFareMinimum;
+  final double rideFareMaximum;
+  final double haulCommission;
+  final bool maintenanceMode;
+  final double serviceZoneSWLat;
+  final double serviceZoneSWLng;
+  final double serviceZoneNELat;
+  final double serviceZoneNELng;
+
+  const AppSettings({
+    this.rideFareBase = 20,
+    this.rideFarePerKm = 8,
+    this.rideFareMinimum = 25,
+    this.rideFareMaximum = 200,
+    this.haulCommission = 75,
+    this.maintenanceMode = false,
+    this.serviceZoneSWLat = 20.780,
+    this.serviceZoneSWLng = 73.190,
+    this.serviceZoneNELat = 20.920,
+    this.serviceZoneNELng = 73.320,
+  });
+
+  factory AppSettings.fromFirestore(Map<String, dynamic> d) {
+    final sw = d['serviceZoneSW'] as Map<String, dynamic>? ?? {};
+    final ne = d['serviceZoneNE'] as Map<String, dynamic>? ?? {};
+    return AppSettings(
+      rideFareBase: (d['rideFareBase'] ?? 20).toDouble(),
+      rideFarePerKm: (d['rideFarePerKm'] ?? 8).toDouble(),
+      rideFareMinimum: (d['rideFareMinimum'] ?? 25).toDouble(),
+      rideFareMaximum: (d['rideFareMaximum'] ?? 200).toDouble(),
+      haulCommission: (d['haulCommission'] ?? 75).toDouble(),
+      maintenanceMode: d['maintenanceMode'] ?? false,
+      serviceZoneSWLat: (sw['lat'] ?? 20.780).toDouble(),
+      serviceZoneSWLng: (sw['lng'] ?? 73.190).toDouble(),
+      serviceZoneNELat: (ne['lat'] ?? 20.920).toDouble(),
+      serviceZoneNELng: (ne['lng'] ?? 73.320).toDouble(),
+    );
+  }
+}
+
+class SettingsService {
+  static AppSettings? _cached;
+
+  static Future<AppSettings> getSettings() async {
+    if (_cached != null) return _cached!;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('app_settings')
+          .doc('config')
+          .get();
+      if (doc.exists && doc.data() != null) {
+        _cached = AppSettings.fromFirestore(doc.data()!);
+        return _cached!;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Settings load failed, using defaults: $e');
+    }
+    _cached = const AppSettings();
+    return _cached!;
+  }
+
+  static void clearCache() => _cached = null;
+
+  // Listen for maintenance mode changes
+  static Stream<bool> maintenanceModeStream() {
+    return FirebaseFirestore.instance
+        .collection('app_settings')
+        .doc('config')
+        .snapshots()
+        .map((snap) => snap.data()?['maintenanceMode'] ?? false);
+  }
+}
+```
+
+===================================================
+ALL SCREENS UI — COMPLETE PRODUCTION REWRITE
+===================================================
+
+## WELCOME SCREEN — Fix full screen display
+
+```dart
+// lib/screens/welcome_screen.dart
+
+@override
+Widget build(BuildContext context) {
+  final size = MediaQuery.of(context).size;
+  return Scaffold(
+    backgroundColor: Colors.white,
+    body: Column(
+      children: [
+        // Green top section — exactly 55% of screen
+        Container(
+          height: size.height * 0.55,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1B5E20), Color(0xFF2E7D32),
+                Color(0xFF43A047)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(48),
+              bottomRight: Radius.circular(48),
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // App icon
+                Container(
+                  width: 100, height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.directions_bus_outlined,
+                    color: Colors.white,
+                    size: 56,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'GaamRide',
+                  style: TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'ગામનો પોતાનો સાથી',
+                  style: TextStyle(fontSize: 18, color: Colors.white70),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Village Transport at Your Fingertips',
+                  style: TextStyle(fontSize: 13, color: Colors.white54),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // White bottom section — 45% of screen
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+            child: Column(
+              children: [
+                // Customer button
+                SizedBox(
+                  width: double.infinity,
+                  height: 60,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const LoginScreen(role: 'customer'),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.person_outline,
+                            color: Colors.white, size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Customer તરીકે ચાલુ',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Text(
+                                'Continue as Customer',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          color: Colors.white54,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                // Saathi button
+                SizedBox(
+                  width: double.infinity,
+                  height: 60,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE65100),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const LoginScreen(role: 'saathi'),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.two_wheeler,
+                            color: Colors.white, size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Gaam Saathi બનો',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Text(
+                                'Become a Driver & Earn',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          color: Colors.white54,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Location tag
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Mahuva Taluka · Surat · Gujarat',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+```
+
+## OTP SCREEN — Fix layout same way
+
+```dart
+// Same fix as login — use Column not Stack+Positioned
+// Root: Scaffold → SingleChildScrollView → Column
+//   → Header Container (height 35% screen)
+//   → Content Padding with all OTP inputs + button
+
+@override
+Widget build(BuildContext context) {
+  final size = MediaQuery.of(context).size;
+  return Scaffold(
+    backgroundColor: Colors.white,
+    resizeToAvoidBottomInset: true,
+    body: SingleChildScrollView(
+      child: Column(children: [
+        // Header
+        Container(
+          height: size.height * 0.32,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: _isSaathi
+                ? [Color(0xFFBF360C), Color(0xFFE65100)]
+                : [Color(0xFF1B5E20), Color(0xFF2E7D32)]),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(40),
+              bottomRight: Radius.circular(40))),
+          child: SafeArea(child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle),
+                    child: Icon(Icons.arrow_back,
+                      color: Colors.white, size: 20))),
+                Spacer(),
+                Text('OTP ચકાસો',
+                  style: TextStyle(fontSize: 26,
+                    fontWeight: FontWeight.bold, color: Colors.white)),
+                SizedBox(height: 6),
+                Text('+91 ${widget.phone} પર OTP મોકલ્યો',
+                  style: TextStyle(fontSize: 14,
+                    color: Colors.white70)),
+              ],
+            ),
+          )),
+        ),
+        // OTP inputs
+        Padding(
+          padding: EdgeInsets.fromLTRB(24, 32, 24, 24),
+          child: Column(children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(6, (i) => _otpBox(i))),
+            SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity, height: 56,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isSaathi
+                    ? Color(0xFFE65100) : Color(0xFF2E7D32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16))),
+                onPressed: _isLoading ? null : _verify,
+                child: _isLoading
+                  ? SizedBox(width: 24, height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2))
+                  : Text('ચકાસો / Verify',
+                      style: TextStyle(fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+              ),
+            ),
+            SizedBox(height: 20),
+            // Resend OTP
+            TextButton(
+              onPressed: _canResend ? _resendOTP : null,
+              child: Text(
+                _canResend ? 'OTP ફરી મોકલો / Resend OTP'
+                  : 'ફરી મોકલો: ${_resendSeconds}s',
+                style: TextStyle(
+                  color: _canResend ? _primaryColor : Colors.grey)),
+            ),
+          ]),
+        ),
+      ]),
+    ),
+  );
+}
+
+Widget _otpBox(int i) {
+  return SizedBox(
+    width: 46, height: 58,
+    child: TextField(
+      controller: _ctrls[i],
+      focusNode: _nodes[i],
+      textAlign: TextAlign.center,
+      keyboardType: TextInputType.number,
+      maxLength: 1,
+      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      decoration: InputDecoration(
+        counterText: '',
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5)),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: _primaryColor, width: 2)),
+        filled: true,
+        fillColor: _ctrls[i].text.isNotEmpty
+          ? _primaryColor.withOpacity(0.08) : Colors.grey.shade50),
+      onChanged: (val) {
+        if (val.isNotEmpty && i < 5) _nodes[i+1].requestFocus();
+        if (val.isEmpty && i > 0) _nodes[i-1].requestFocus();
+        setState(() {});
+        if (_otp.length == 6) _verify();
+      },
+    ),
+  );
+}
+```
+
+===================================================
+ALL FIREBASE REAL-TIME CONNECTIONS — CHECK & FIX
+===================================================
+
+## Customer Home Screen — verify Saathi query works
+
+```dart
+// In customer_home_screen.dart _findSaathi():
+// This is the most important query — verify it works
+
+Future<void> _findSaathi() async {
+  if (_selectedVillage == null) return;
+  if (_userLat == 0 || _userLng == 0) {
+    _showSnack('સ્થાન મળ્યું નથી. Refresh કરો.');
+    return;
+  }
+
+  setState(() { _isSearching = true; _searched = false; });
+
+  try {
+    // Step 1: Get all available saathis within 10km
+    // Using geoflutterfire_plus for geo query
+    final geo = GeoFlutterFire();
+    final collectionRef = FirebaseFirestore.instance
+        .collection('saathis');
+
+    final center = geo.point(
+      latitude: _userLat, longitude: _userLng);
+
+    final stream = geo.collection(collectionRef: collectionRef)
+        .within(
+          center: center,
+          radius: 10, // 10km radius
+          field: 'position',
+          strictMode: false);
+
+    final docs = await stream.first;
+
+    // Step 2: Filter in Dart (avoids composite index requirement)
+    final available = docs
+        .where((doc) {
+          final d = doc.data() as Map<String, dynamic>;
+          return d['isAvailable'] == true &&
+                 d['isBlocked'] != true &&
+                 d['isOnline'] == true;
+        })
+        .map((doc) {
+          final d = doc.data() as Map<String, dynamic>;
+          return SaathiModel.fromMap(d);
+        })
+        .toList();
+
+    // Step 3: Smart sort
+    // a. Same village first (PREFERRED)
+    // b. Then by distance
+    available.sort((a, b) {
+      final aIsSameVillage = a.village == _currentVillageName;
+      final bIsSameVillage = b.village == _currentVillageName;
+
+      if (aIsSameVillage && !bIsSameVillage) return -1;
+      if (!aIsSameVillage && bIsSameVillage) return 1;
+
+      // Both same or both different — sort by distance
+      final aDist = Geolocator.distanceBetween(
+        _userLat, _userLng,
+        a.lat ?? 0, a.lng ?? 0);
+      final bDist = Geolocator.distanceBetween(
+        _userLat, _userLng,
+        b.lat ?? 0, b.lng ?? 0);
+      return aDist.compareTo(bDist);
+    });
+
+    if (!mounted) return;
+    setState(() {
+      _saathiList = available;
+      _isSearching = false;
+      _searched = true;
+    });
+
+    if (available.isEmpty) {
+      _showSnack('આ વિસ્તારમાં કોઈ સાથી ઉપલબ્ધ નથી');
+    }
+
+  } catch (e) {
+    debugPrint('❌ Saathi search error: $e');
+    if (!mounted) return;
+    setState(() { _isSearching = false; _searched = true; });
+    _showSnack('Error: $e');
+  }
+}
+```
+
+## Saathi Dashboard — verify online toggle updates Firestore
+
+```dart
+// In saathi_dashboard.dart _toggleOnline():
+Future<void> _toggleOnline() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+
+  if (!_isOnline) {
+    // Going ONLINE
+    final permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      _showSnack('Location permission needed to go online');
+      return;
+    }
+
+    setState(() => _isOnline = true);
+
+    // Get current position
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high));
+
+      final geoPoint = GeoFirePoint(pos.latitude, pos.longitude);
+
+      // Update Firestore — verify this works
+      await FirebaseFirestore.instance
+          .collection('saathis')
+          .doc(uid)
+          .update({
+        'isAvailable': true,
+        'isOnline': true,
+        'position': geoPoint.data,
+        'lastSeen': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint('✅ Saathi online, position updated: '
+          '${pos.latitude}, ${pos.longitude}');
+
+      // Start location stream
+      _startLocationStream(uid);
+
+    } catch (e) {
+      debugPrint('❌ Go online error: $e');
+      setState(() => _isOnline = false);
+      _showSnack('Error: $e');
+    }
+
+  } else {
+    // Going OFFLINE
+    _locationStream?.cancel();
+
+    await FirebaseFirestore.instance
+        .collection('saathis')
+        .doc(uid)
+        .update({
+      'isAvailable': false,
+      'isOnline': false,
+      'lastSeen': FieldValue.serverTimestamp(),
+    });
+
+    setState(() => _isOnline = false);
+    debugPrint('✅ Saathi offline');
+  }
+}
+
+void _startLocationStream(String uid) {
+  _locationStream = Geolocator.getPositionStream(
+    locationSettings: const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 20,
+    ),
+  ).listen((pos) async {
+    if (!_isOnline) return;
+
+    final geoPoint = GeoFirePoint(pos.latitude, pos.longitude);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('saathis')
+          .doc(uid)
+          .update({
+        'position': geoPoint.data,
+        'lastSeen': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('⚠️ Location update error: $e');
+    }
+  });
+}
+```
+
+## Incoming ride requests — verify StreamBuilder works
+
+```dart
+// In saathi_dashboard.dart:
+StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('rides')
+      .where('status', isEqualTo: 'searching')
+      .orderBy('createdAt', descending: true)
+      .limit(5)
+      .snapshots(),
+  builder: (context, snapshot) {
+    if (snapshot.hasError) {
+      debugPrint('❌ Rides stream error: ${snapshot.error}');
+      // Check for index error
+      final error = snapshot.error.toString();
+      if (error.contains('index')) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.orange.shade50,
+            borderRadius: BorderRadius.circular(12)),
+          child: Column(children: [
+            Icon(Icons.warning_amber, color: Colors.orange),
+            SizedBox(height: 8),
+            Text('Firestore index needed',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('Go to Firebase Console → Indexes and create:',
+              style: TextStyle(fontSize: 12)),
+            Text('rides: status ASC, createdAt DESC',
+              style: TextStyle(fontSize: 12, fontFamily: 'monospace')),
+          ]),
+        );
+      }
+      return Text('Error: ${snapshot.error}',
+        style: TextStyle(color: Colors.red));
+    }
+
+    if (!snapshot.hasData) {
+      return Center(child: CircularProgressIndicator(
+        color: AppColors.primaryGreen));
+    }
+
+    final rides = snapshot.data!.docs;
+
+    if (rides.isEmpty) {
+      return Container(
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12)),
+        child: Column(mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.directions_bike_outlined,
+              size: 40, color: Colors.grey.shade300),
+            SizedBox(height: 8),
+            Text('નવી રાઈડ ની રાહ...',
+              style: TextStyle(color: Colors.grey)),
+          ]),
+      );
+    }
+
+    return Column(children:
+      rides.map((doc) => _buildRideRequestCard(doc)).toList());
+  },
+),
+```
+
+===================================================
+FIRESTORE INDEXES — CREATE ALL THESE
+===================================================
+
+Go to Firebase Console → Firestore → Indexes → Add Index
+Create each one manually:
+
+1. Collection: rides
+   Fields: status (Ascending), createdAt (Descending)
+   Scope: Collection
+
+2. Collection: rides
+   Fields: customerId (Ascending), createdAt (Descending)
+   Scope: Collection
+
+3. Collection: rides
+   Fields: saathiId (Ascending), createdAt (Descending)
+   Scope: Collection
+
+4. Collection: rides
+   Fields: saathiId (Ascending), status (Ascending), completedAt (Descending)
+   Scope: Collection
+
+5. Collection: haul_bookings
+   Fields: customerId (Ascending), createdAt (Descending)
+   Scope: Collection
+
+6. Collection: haul_bookings
+   Fields: vehicleOwnerId (Ascending), createdAt (Descending)
+   Scope: Collection
+
+7. Collection: saathis
+   Fields: isOnline (Ascending), lastSeen (Descending)
+   Scope: Collection
+
+===================================================
+MINOR UI FIXES — ALL SCREENS
+===================================================
+
+1. All screens: add resizeToAvoidBottomInset: true to Scaffold
+
+2. All screens with SingleChildScrollView:
+   Add physics: const BouncingScrollPhysics()
+
+3. All text inputs: add
+   textInputAction: TextInputAction.next
+   on all except last field (use TextInputAction.done)
+
+4. All ElevatedButton: add haptic feedback
+   onPressed: () {
+     HapticFeedback.lightImpact();
+     _yourAction();
+   }
+
+5. All loading states: replace CircularProgressIndicator alone
+   with shimmer skeleton using shimmer package
+
+6. Customer home: when no destination selected,
+   make Find Saathi button grey with opacity 0.5
+   When destination selected: animate to full green with elevation
+
+7. All error SnackBars: use red background
+   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+     content: Text(msg),
+     backgroundColor: Colors.red.shade700,
+     behavior: SnackBarBehavior.floating,
+     shape: RoundedRectangleBorder(
+       borderRadius: BorderRadius.circular(10))));
+
+8. All success actions: use green SnackBar
+   backgroundColor: Colors.green.shade700
+
+9. Customer home top greeting: get name from Firestore users/{uid}
+   Show "kem cho, Tanvir 👋" not generic text
+
+10. Saathi dashboard: show vehicle type + village in header
+    "Bike · Kos" below name
+
+===================================================
+LOGIC BUGS TO FIX
+===================================================
+
+BUG 1 — Distance calculation showing wrong fare
+In customer_home_screen.dart when destination selected:
+```dart
+void _onDestinationSelected(VillageModel village) {
+  setState(() => _selectedVillage = village);
+
+  if (_userLat != 0 && _userLng != 0) {
+    // MUST divide by 1000 — Geolocator returns METERS
+    final distanceMeters = Geolocator.distanceBetween(
+      _userLat, _userLng,
+      village.lat, village.lng);
+
+    final distanceKm = distanceMeters / 1000; // ← KEY FIX
+
+    setState(() {
+      _distKm = distanceKm;
+      _etaMinutes = (distanceKm / 25 * 60).round();
+      _fare = _calculateFare(distanceKm);
+    });
+  }
+}
+
+double _calculateFare(double distanceKm) {
+  final base = _settings?.rideFareBase ?? 20;
+  final perKm = _settings?.rideFarePerKm ?? 8;
+  final min = _settings?.rideFareMinimum ?? 25;
+  final max = _settings?.rideFareMaximum ?? 200;
+
+  if (distanceKm <= 0 || distanceKm > 50) return min;
+  double fare = base + (distanceKm * perKm);
+  fare = fare.clamp(min, max);
+  return (fare / 5).round() * 5.0;
+}
+```
+
+BUG 2 — Ride creation missing customerId
+In ride_service.dart createRide():
+```dart
+// Always get userId from FirebaseAuth directly
+final uid = FirebaseAuth.instance.currentUser?.uid;
+if (uid == null || uid.isEmpty) {
+  throw Exception('User not logged in');
+}
+// customerId = uid — never empty string
+```
+
+BUG 3 — Status stored as pipe string
+In ride_service.dart:
+```dart
+// BEFORE every Firestore write, assert:
+assert(!status.contains('|'),
+  'BUG: status has pipe characters: $status');
+```
+
+BUG 4 — Back navigation after login
+After login/registration, always use pushAndRemoveUntil:
+```dart
+Navigator.pushAndRemoveUntil(
+  context,
+  MaterialPageRoute(builder: (_) => screen),
+  (route) => false, // removes ALL previous routes
+);
+// This prevents user pressing back to go to login screen
+```
+
+BUG 5 — FCM token not saved after login
+In auth flow after successful login:
+```dart
+// Get and save FCM token
+final fcmToken = await FirebaseMessaging.instance.getToken();
+if (fcmToken != null) {
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .update({'fcmToken': fcmToken});
+  // Also update saathis if user is saathi
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users').doc(uid).get();
+  if (userDoc.data()?['role'] == 'saathi') {
+    await FirebaseFirestore.instance
+        .collection('saathis').doc(uid)
+        .update({'fcmToken': fcmToken});
+  }
+}
+```
+
+===================================================
+FILES TO UPDATE (in order)
+===================================================
+
+1. lib/screens/auth/login_screen.dart
+   → Fix layout: SingleChildScrollView + Column (NOT Stack)
+   → Add resizeToAvoidBottomInset: true
+
+2. lib/screens/welcome_screen.dart
+   → Fix layout: Column with Container top + Expanded bottom
+
+3. lib/screens/auth/otp_screen.dart
+   → Same layout fix + resend timer
+
+4. lib/services/settings_service.dart
+   → Full rewrite with AppSettings class
+
+5. lib/services/firebase_check_service.dart
+   → Create new — debug diagnostic
+
+6. lib/screens/customer/customer_home_screen.dart
+   → Fix _findSaathi() with proper geoquery
+   → Fix distance calculation (meters → km)
+   → Fix fare calculation using settings
+
+7. lib/screens/saathi/saathi_dashboard.dart
+   → Fix _toggleOnline() with proper error handling
+   → Fix StreamBuilder with index error detection
+   → Fix _startLocationStream()
+
+8. lib/main.dart
+   → Add FirebaseCheckService.runChecks()
+   → Add FCM token initialization
+
+Do NOT change:
+- firebase_options.dart
+- pubspec.yaml packages
+- Any model files
+- Any constants files
+
+Generate complete working code for all 8 files above.
+Every screen must show content — no blank white sections.

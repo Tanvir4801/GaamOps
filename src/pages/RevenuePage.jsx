@@ -48,7 +48,7 @@ export default function RevenuePage() {
     [completedRides])
 
   const haulRevenue = useMemo(() =>
-    completedHauls.reduce((s, h) => s + Number(h.appCommission || 75), 0),
+    completedHauls.reduce((s, h) => s + Number(h.appCommission ?? h.commission ?? 0), 0),
     [completedHauls])
 
   const now = new Date()
@@ -61,7 +61,7 @@ export default function RevenuePage() {
     const h = completedHauls.filter((haul) => {
       const d = toDate(haul.createdAt)
       return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-    }).reduce((s, h) => s + Number(h.appCommission || 75), 0)
+    }).reduce((s, h) => s + Number(h.appCommission ?? h.commission ?? 0), 0)
     return r + h
   }, [completedRides, completedHauls])
 
@@ -76,7 +76,7 @@ export default function RevenuePage() {
     const h = completedHauls.filter((haul) => {
       const d = toDate(haul.createdAt)
       return d && d >= weekStart
-    }).reduce((s, h) => s + Number(h.appCommission || 75), 0)
+    }).reduce((s, h) => s + Number(h.appCommission ?? h.commission ?? 0), 0)
     return r + h
   }, [completedRides, completedHauls])
 
@@ -97,7 +97,7 @@ export default function RevenuePage() {
       const haulRev = completedHauls.filter((h) => {
         const hd = toDate(h.createdAt)
         return hd && hd.toISOString().slice(0, 10) === key
-      }).reduce((s, h) => s + Number(h.appCommission || 75), 0)
+      }).reduce((s, h) => s + Number(h.appCommission ?? h.commission ?? 0), 0)
 
       days.push({ label, GaamRide: rideRev, GaamHaul: haulRev, total: rideRev + haulRev })
     }

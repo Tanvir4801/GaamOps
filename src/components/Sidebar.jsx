@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { label: 'REPORTS', type: 'header' },
   { to: '/revenue', label: 'Revenue', icon: '💰' },
   { to: '/analytics', label: 'Analytics', icon: '📊' },
+  { to: '/wallet', label: 'Wallet / GaamCash', icon: '💳' },
   { label: 'SETTINGS', type: 'header' },
   { to: '/villages', label: 'Villages', icon: '📍' },
   { to: '/pricing', label: 'Pricing', icon: '💲' },

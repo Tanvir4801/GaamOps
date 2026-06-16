@@ -7,3 +7,6 @@
 - [Firestore migration](firestore-migration.md) — scripts/migrate_firestore.js ran once; fixed pipe-separated roles/statuses, SF geopoint, double-colon field names, missing fields
 - [GaamRide model APIs](gaamride-model-apis.md) — SaathiModel has no isVerified; use isBlocked. SettingsService.getSettings() returns AppSettingsModel (call .toMap() for FareCalculator). Future.wait with mixed return types needs sequential awaits to avoid cast issues.
 - [flutter_map v6 notes](flutter-map-v6.md) — flutter_map ^6.1.0 + latlong2 ^0.9.0 used for OSM tracking screen. Polyline.isDotted was removed in v6 — do not use it. MapController must be disposed manually. CameraConstraint.contain(bounds: LatLngBounds(sw, ne)) locks to region. OSM attribution text required by tile usage policy.
+- [Wallet Firestore path](wallet-path.md) — GaamCash: users/{uid}/wallet/balance (doc with `balance` field) + subcollection transactions. Fallback: gaamCash field on user doc. Always init wallet doc on first load.
+- [Admin revenue haul commission](revenue-commission.md) — use `h.appCommission ?? h.commission ?? 0`; never hardcode 75 as default — that inflates revenue numbers.
+- [Layout pattern for auth screens](flutter-layout-auth.md) — all auth screens (login, welcome) use Column not Stack+Positioned; SingleChildScrollView wraps Column for keyboard safety.
