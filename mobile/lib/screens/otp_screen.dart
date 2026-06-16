@@ -33,8 +33,14 @@ class _OtpScreenState extends State<OtpScreen> {
   bool _loading = false;
   String? _error;
 
-  bool get _isSaathi => widget.role == 'saathi';
-  Color get _color => _isSaathi ? AppColors.primaryOrange : AppColors.primaryGreen;
+  bool get _isSaathi    => widget.role == 'saathi';
+  bool get _isHaulOwner => widget.role == 'haul_owner';
+
+  Color get _color {
+    if (_isSaathi)    return AppColors.primaryOrange;
+    if (_isHaulOwner) return const Color(0xFF5D4037);
+    return AppColors.primaryGreen;
+  }
 
   String get _otp => _controllers.map((c) => c.text).join();
 

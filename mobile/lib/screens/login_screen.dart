@@ -25,11 +25,38 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _googleLoading = false;
   String? _error;
 
-  bool get _isSaathi => widget.role == 'saathi';
-  Color get _color =>
-      _isSaathi ? const Color(0xFFE65100) : const Color(0xFF2E7D32);
-  Color get _darkColor =>
-      _isSaathi ? const Color(0xFFBF360C) : const Color(0xFF1B5E20);
+  bool get _isSaathi    => widget.role == 'saathi';
+  bool get _isHaulOwner => widget.role == 'haul_owner';
+
+  Color get _color {
+    if (_isSaathi)    return const Color(0xFFE65100);
+    if (_isHaulOwner) return const Color(0xFF5D4037);
+    return const Color(0xFF2E7D32);
+  }
+
+  Color get _darkColor {
+    if (_isSaathi)    return const Color(0xFFBF360C);
+    if (_isHaulOwner) return const Color(0xFF3E2723);
+    return const Color(0xFF1B5E20);
+  }
+
+  String get _title {
+    if (_isSaathi)    return 'Saathi Login';
+    if (_isHaulOwner) return 'Haul Owner Login';
+    return 'Customer Login';
+  }
+
+  String get _subtitle {
+    if (_isSaathi)    return 'Earn by Driving';
+    if (_isHaulOwner) return 'વાહન ભાડે આપો / Rent Your Vehicle';
+    return 'Book rides instantly';
+  }
+
+  IconData get _icon {
+    if (_isSaathi)    return Icons.two_wheeler;
+    if (_isHaulOwner) return Icons.local_shipping_outlined;
+    return Icons.person_outline;
+  }
 
   String? _validate(String phone) {
     if (phone.length != 10) return 'Valid 10-digit number enter karao';
@@ -210,16 +237,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          _isSaathi
-                              ? Icons.two_wheeler
-                              : Icons.person_outline,
+                          _icon,
                           color: Colors.white,
                           size: 32,
                         ),
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        _isSaathi ? 'Saathi Login' : 'Customer Login',
+                        _title,
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -228,9 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _isSaathi
-                            ? 'Earn by Driving'
-                            : 'Book rides instantly',
+                        _subtitle,
                         style: const TextStyle(
                             fontSize: 14, color: Colors.white70),
                       ),
@@ -395,7 +418,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 20),
 
                   // Google Sign-In button — customers only
-                  if (!_isSaathi) ...[
+                  if (!_isSaathi && !_isHaulOwner) ...[
                     SizedBox(
                       width: double.infinity,
                       height: 56,
