@@ -964,7 +964,7 @@ class _BottomCard extends StatelessWidget {
                       const Icon(Icons.location_on, size: 10,
                           color: AppColors.primaryOrange),
                       const SizedBox(width: 4),
-                      Text(ride.destinationVillage,
+                      Text(ride!.destinationVillage,
                           style: const TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 13)),
                     ]),
@@ -972,12 +972,12 @@ class _BottomCard extends StatelessWidget {
                 )),
                 Column(crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('₹${ride.fare.toStringAsFixed(0)}',
+                    Text('₹${ride!.fare.toStringAsFixed(0)}',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                             color: AppColors.primaryGreen)),
-                    Text('${ride.distance.toStringAsFixed(1)} km',
+                    Text('${ride!.distance.toStringAsFixed(1)} km',
                         style: const TextStyle(
                             fontSize: 11, color: AppColors.textGrey)),
                   ],

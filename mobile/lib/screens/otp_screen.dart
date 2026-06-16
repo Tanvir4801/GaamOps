@@ -128,11 +128,20 @@ class _OtpScreenState extends State<OtpScreen> {
       );
 
       // Delete old temp docs (phone-keyed)
-      batch.delete(tempDoc.ref);
+    batch.delete(
+  FirebaseFirestore.instance
+      .collection('saathis')
+      .doc(phoneClean),
+);
       final tempUserDoc = await FirebaseFirestore.instance
           .collection('users').doc(phoneClean).get();
-      if (tempUserDoc.exists) batch.delete(tempUserDoc.ref);
-
+ if (tempUserDoc.exists) {
+  batch.delete(
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(phoneClean),
+  );
+}
       await batch.commit();
       debugPrint('✅ Migration complete: $phoneClean → $uid');
     } catch (e) {

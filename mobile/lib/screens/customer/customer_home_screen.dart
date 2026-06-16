@@ -87,7 +87,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
   Future<void> _loadLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium));
+  desiredAccuracy: LocationAccuracy.medium,
+);
       if (mounted) setState(() => _myPosition = pos);
     } catch (_) {}
   }

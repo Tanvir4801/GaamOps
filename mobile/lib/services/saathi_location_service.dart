@@ -52,11 +52,9 @@ class SaathiLocationService {
     //    (keeps the ETA countdown accurate on the customer side)
     _heartbeat = Timer.periodic(const Duration(seconds: 4), (_) async {
       try {
-        final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-          ),
-        );
+       final pos = await Geolocator.getCurrentPosition(
+  desiredAccuracy: LocationAccuracy.medium,
+);
         _lastKnownPosition = pos;
         _push(rideId, pos);
       } catch (_) {
@@ -91,11 +89,9 @@ class SaathiLocationService {
   /// One-shot: get current position (for initial placement).
   static Future<Position?> getCurrentPosition() async {
     try {
-      return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
+     final pos = await Geolocator.getCurrentPosition(
+  desiredAccuracy: LocationAccuracy.medium,
+);
     } catch (_) {
       return null;
     }

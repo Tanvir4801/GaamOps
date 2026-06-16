@@ -70,9 +70,9 @@ class _GaamHaulHomeScreenState extends State<GaamHaulHomeScreen> {
     setState(() => _loading = true);
     final villages = await VillageService.getVillages();
     try {
-      _myPosition = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.medium));
+      final pos = await Geolocator.getCurrentPosition(
+  desiredAccuracy: LocationAccuracy.medium,
+);
     } catch (_) {}
     if (mounted) {
       setState(() {
@@ -90,8 +90,8 @@ class _GaamHaulHomeScreenState extends State<GaamHaulHomeScreen> {
   Future<void> _detectLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.medium));
+  desiredAccuracy: LocationAccuracy.medium,
+);
       if (mounted) {
         setState(() => _myPosition = pos);
         if (_villages.isNotEmpty) {
