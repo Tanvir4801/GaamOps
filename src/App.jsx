@@ -22,7 +22,6 @@ import HaulHistoryPage from './pages/HaulHistoryPage.jsx'
 import BookingsPage from './pages/BookingsPage.jsx'
 import VerificationsPage from './pages/VerificationsPage.jsx'
 import PricingPage from './pages/PricingPage.jsx'
-import WalletManagementPage from './pages/WalletManagementPage.jsx'
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -50,7 +49,6 @@ const router = createBrowserRouter([
       { path: '/revenue', element: <RevenuePage /> },
       { path: '/analytics', element: <AnalyticsPage /> },
       { path: '/pricing', element: <PricingPage /> },
-      { path: '/wallet', element: <WalletManagementPage /> },
       { path: '/app-settings', element: <AppSettingsPage /> },
     ],
   },
