@@ -467,6 +467,12 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
 
   Widget _statCard(
       String label, String value, String sub, Color color) {
+    // Parse numeric portion for animation (e.g. "₹1,200" → 1200, "5" → 5)
+    final numericStr = value.replaceAll(RegExp(r'[^0-9]'), '');
+    final targetNum = double.tryParse(numericStr) ?? 0;
+    final prefix = value.contains('₹') ? '₹' : '';
+    final suffix = value.replaceAll(RegExp(r'[₹0-9,]'), '');
+
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -482,9 +488,21 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
               style: const TextStyle(
                   fontSize: 11, color: AppColors.textGrey)),
           const SizedBox(height: 4),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: targetNum),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOut,
+            builder: (_, v, __) {
+              final display = targetNum >= 100
+                  ? v.toInt().toString()
+                  : v.toStringAsFixed(0);
+              return Text(
+                '$prefix$display$suffix',
+                style: TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.bold, color: color),
+              );
+            },
+          ),
           Text(sub,
               style: const TextStyle(
                   fontSize: 10, color: AppColors.textGrey)),

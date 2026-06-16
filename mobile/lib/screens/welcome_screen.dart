@@ -32,47 +32,81 @@ class WelcomeScreen extends StatelessWidget {
                 bottomRight: Radius.circular(48),
               ),
             ),
-            child: SafeArea(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 1.5,
+            child: Stack(children: [
+              // Decorative background circles for depth
+              Positioned(
+                top: -40, right: -40,
+                child: Container(
+                  width: 200, height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.06),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 80, left: -60,
+                child: Container(
+                  width: 240, height: 240,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: -20, right: 30,
+                child: Container(
+                  width: 160, height: 160,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              // Main content
+              SafeArea(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: const Icon(Icons.electric_rickshaw,
+                          color: Colors.white, size: 56),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      AppStrings.appName,
+                      style: TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.5,
                       ),
                     ),
-                    child: const Icon(Icons.electric_rickshaw,
-                        color: Colors.white, size: 56),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    AppStrings.appName,
-                    style: TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1.5,
+                    const SizedBox(height: 8),
+                    const Text(
+                      AppStrings.taglineGu,
+                      style: TextStyle(fontSize: 18, color: Colors.white70),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    AppStrings.taglineGu,
-                    style: TextStyle(fontSize: 18, color: Colors.white70),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    AppStrings.taglineEn,
-                    style: TextStyle(fontSize: 13, color: Colors.white54),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    const Text(
+                      AppStrings.taglineEn,
+                      style: TextStyle(fontSize: 13, color: Colors.white54),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ]),
           ),
 
           // ── BOTTOM WHITE SECTION (45% of screen) ─────────

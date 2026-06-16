@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import '../../models/haul_booking_model.dart';
@@ -168,6 +170,54 @@ class _HaulOwnerJobScreenState extends State<HaulOwnerJobScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
+          // Mini OSM map — shows pickup location
+          if (b.pickupLat != 0 && b.pickupLng != 0) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                height: 160,
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: LatLng(b.pickupLat, b.pickupLng),
+                    initialZoom: 14,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,
+                    ),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.gaamride.app',
+                    ),
+                    MarkerLayer(markers: [
+                      Marker(
+                        point: LatLng(b.pickupLat, b.pickupLng),
+                        width: 44, height: 44,
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Container(
+                            width: 28, height: 28,
+                            decoration: const BoxDecoration(
+                              color: AppColors.primaryOrange,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.location_on,
+                                color: Colors.white, size: 16),
+                          ),
+                          Container(
+                            width: 2, height: 6,
+                            color: AppColors.primaryOrange,
+                          ),
+                        ]),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+
           // Vehicle + customer header
           Container(
             padding: const EdgeInsets.all(18),

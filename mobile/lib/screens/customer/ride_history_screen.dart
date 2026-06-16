@@ -354,22 +354,56 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAll = filter == 'All';
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.receipt_long_outlined,
-              color: AppColors.textGrey, size: 48),
-          const SizedBox(height: 12),
-          Text(
-            filter == 'All' ? 'No rides yet' : 'No $filter rides',
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, color: AppColors.textDark),
-          ),
-          const SizedBox(height: 6),
-          const Text('Book your first ride from the home screen',
-              style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 100, height: 100,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.history_rounded,
+                  size: 50, color: Colors.grey.shade300),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              isAll ? 'કોઈ સવારી નથી' : 'No $filter rides',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isAll
+                  ? 'No ride history yet'
+                  : 'No $filter rides found',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            ),
+            if (isAll) ...[
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.directions_bike, color: Colors.white, size: 18),
+                label: const Text('Book First Ride',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryGreen,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  elevation: 0,
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

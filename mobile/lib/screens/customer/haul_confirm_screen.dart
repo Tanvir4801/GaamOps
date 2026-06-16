@@ -82,7 +82,7 @@ class _HaulConfirmScreenState extends State<HaulConfirmScreen> {
         title: const Text('Confirm Haul Booking',
             style: TextStyle(fontWeight: FontWeight.bold)),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,7 +139,49 @@ class _HaulConfirmScreenState extends State<HaulConfirmScreen> {
                 ],
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 14),
+            // Payment info card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.shade100),
+              ),
+              child: Column(children: [
+                Row(children: [
+                  const Icon(Icons.info_outline, color: Colors.orange, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Text(
+                    'ચુકવણી માહિતી / Payment Info',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  )),
+                ]),
+                const SizedBox(height: 10),
+                _InfoRow('App fee ₹75', 'Booking confirm થયા પછી ₹75 charged'),
+                _InfoRow('Owner earnings', 'સીધા owner ને cash/UPI આપો'),
+                _InfoRow('Cash / UPI', 'Both payment methods accepted'),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            // Cancellation policy
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                const Icon(Icons.cancel_outlined, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                const Expanded(child: Text(
+                  'Booking confirm પહેલાં cancel free. '
+                  'પછી ₹20 cancellation charge.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                )),
+              ]),
+            ),
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               height: 54,
@@ -157,6 +199,38 @@ class _HaulConfirmScreenState extends State<HaulConfirmScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _InfoRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_outline, size: 14, color: Colors.orange),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 12, color: Colors.black87),
+                children: [
+                  TextSpan(text: '$label — ',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  TextSpan(text: value),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

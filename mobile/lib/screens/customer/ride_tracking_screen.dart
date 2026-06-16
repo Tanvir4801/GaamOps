@@ -242,7 +242,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen>
     if (_saathiPosition != null) {
       list.add(Marker(
         point: _saathiPosition!,
-        width: 52, height: 52,
+        width: 64, height: 70,
         child: _SaathiDot(name: _ride?.saathiName ?? ''),
       ));
     }
@@ -707,34 +707,38 @@ class _SaathiDotState extends State<_SaathiDot>
 
   @override
   Widget build(BuildContext context) {
+    final firstName = widget.name.split(' ').first;
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (_, __) => ScaleTransition(
         scale: _scale,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Name bubble
+          // Name bubble — first name only, ellipsis if long
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            constraints: const BoxConstraints(maxWidth: 60),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
             decoration: BoxDecoration(
               color: AppColors.primaryGreen,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              widget.name.split(' ').first,
+              firstName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 9,
+                  fontSize: 8,
                   fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 2),
           // Green bike icon with animated glow
           Container(
-            width: 38, height: 38,
+            width: 36, height: 36,
             decoration: BoxDecoration(
               color: AppColors.primaryGreen,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2.5),
+              border: Border.all(color: Colors.white, width: 2),
               boxShadow: [
                 BoxShadow(
                     color: AppColors.primaryGreen.withAlpha(160),
@@ -743,7 +747,7 @@ class _SaathiDotState extends State<_SaathiDot>
               ],
             ),
             child: const Icon(Icons.electric_rickshaw,
-                color: Colors.white, size: 20),
+                color: Colors.white, size: 18),
           ),
         ]),
       ),

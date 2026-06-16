@@ -271,64 +271,89 @@ class _SaathiDashboardState extends State<SaathiDashboard>
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(children: [
-              // Online toggle card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8),
-                  ],
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 48, height: 48,
-                    decoration: BoxDecoration(
-                      color: _isOnline
-                          ? AppColors.bgGreen : Colors.grey.shade100,
-                      shape: BoxShape.circle,
+              // Online toggle card — animated gradient
+              GestureDetector(
+                onTap: _toggling ? null : _toggleOnline,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: _isOnline
+                          ? const [Color(0xFF1B5E20), Color(0xFF2E7D32)]
+                          : const [Color(0xFF616161), Color(0xFF757575)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    child: Icon(
-                      _isOnline ? Icons.wifi : Icons.wifi_off,
-                      color: _isOnline
-                          ? AppColors.primaryGreen : AppColors.textGrey,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _isOnline
-                            ? 'Online — Ready for Rides'
-                            : 'Offline',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: _isOnline
-                                ? AppColors.primaryGreen : AppColors.textGrey),
-                      ),
-                      Text(
-                        _isOnline
-                            ? AppStrings.gpsActive
-                            : 'Go online to receive rides',
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.textGrey),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_isOnline
+                                ? AppColors.primaryGreen
+                                : Colors.grey)
+                            .withOpacity(0.35),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
                       ),
                     ],
-                  )),
-                  _toggling
-                      ? const SizedBox(
-                          width: 36, height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2.5))
-                      : Switch.adaptive(
-                          value: _isOnline,
-                          onChanged: (_) => _toggleOnline(),
-                          activeColor: AppColors.primaryGreen,
+                  ),
+                  child: Row(children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: Container(
+                        key: ValueKey(_isOnline),
+                        width: 52, height: 52,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
                         ),
-                ]),
+                        child: Icon(
+                          _isOnline
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isOnline ? '🟢 Online' : '⭕ Offline',
+                          style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _isOnline
+                              ? 'Customers can find you · GPS active'
+                              : 'Tap to go online and earn',
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.white70),
+                        ),
+                      ],
+                    )),
+                    _toggling
+                        ? const SizedBox(
+                            width: 36, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.5, color: Colors.white))
+                        : Switch.adaptive(
+                            value: _isOnline,
+                            onChanged: (_) => _toggleOnline(),
+                            activeColor: Colors.white,
+                            activeTrackColor: Colors.white.withOpacity(0.4),
+                            inactiveThumbColor: Colors.white,
+                            inactiveTrackColor:
+                                Colors.white.withOpacity(0.3),
+                          ),
+                  ]),
+                ),
               ),
 
               const SizedBox(height: 16),
