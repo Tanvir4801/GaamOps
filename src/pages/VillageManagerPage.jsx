@@ -20,6 +20,20 @@ const SEED_VILLAGES = {
 
 const EMPTY_FORM = { name: '', nameGu: '', lat: '', lng: '', taluka: 'Mahuva', isActive: true }
 
+function VillageField({ label, name, type = 'text', value, onChange }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(name, e.target.value)}
+        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+      />
+    </div>
+  )
+}
+
 function validateCoords(lat, lng) {
   const la = Number(lat), lo = Number(lng)
   const minLat = 20.70, maxLat = 20.95
@@ -113,13 +127,10 @@ export default function VillageManagerPage() {
     }
   }
 
-  const F = ({ label, name, type = 'text' }) => (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
-      <input type={type} value={form[name]} onChange={(e) => { setForm({ ...form, [name]: e.target.value }); setFormError('') }}
-        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300" />
-    </div>
-  )
+  const handleFieldChange = (name, value) => {
+    setForm((prev) => ({ ...prev, [name]: value }))
+    setFormError('')
+  }
 
   return (
     <div className="space-y-4">
@@ -202,11 +213,11 @@ export default function VillageManagerPage() {
             )}
             <form onSubmit={handleSave} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <F label="Name *" name="name" />
-                <F label="Gujarati Name *" name="nameGu" />
-                <F label="Latitude *" name="lat" type="number" />
-                <F label="Longitude *" name="lng" type="number" />
-                <F label="Taluka *" name="taluka" />
+                <VillageField label="Name *" name="name" value={form.name} onChange={handleFieldChange} />
+                <VillageField label="Gujarati Name *" name="nameGu" value={form.nameGu} onChange={handleFieldChange} />
+                <VillageField label="Latitude *" name="lat" type="number" value={form.lat} onChange={handleFieldChange} />
+                <VillageField label="Longitude *" name="lng" type="number" value={form.lng} onChange={handleFieldChange} />
+                <VillageField label="Taluka *" name="taluka" value={form.taluka} onChange={handleFieldChange} />
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />

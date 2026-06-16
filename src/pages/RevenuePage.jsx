@@ -35,6 +35,16 @@ export default function RevenuePage() {
     return () => unsubs.forEach((u) => u())
   }, [])
 
+  // Count all rides/hauls that have a fare value (consistent with Analytics)
+  const ridesWithFare = useMemo(() =>
+    rides.filter((r) => Number(r.fare || 0) > 0),
+    [rides])
+
+  const haulsWithCommission = useMemo(() =>
+    haulBookings.filter((h) => Number(h.appCommission ?? h.commission ?? 0) > 0),
+    [haulBookings])
+
+  // For chart breakdowns, separate by completed vs in-progress
   const completedRides = useMemo(() =>
     rides.filter((r) => String(r.status || '').toLowerCase() === 'completed'),
     [rides])
@@ -44,41 +54,41 @@ export default function RevenuePage() {
     [haulBookings])
 
   const rideRevenue = useMemo(() =>
-    completedRides.reduce((s, r) => s + Number(r.fare || 0), 0),
-    [completedRides])
+    ridesWithFare.reduce((s, r) => s + Number(r.fare || 0), 0),
+    [ridesWithFare])
 
   const haulRevenue = useMemo(() =>
-    completedHauls.reduce((s, h) => s + Number(h.appCommission ?? h.commission ?? 0), 0),
-    [completedHauls])
+    haulsWithCommission.reduce((s, h) => s + Number(h.appCommission ?? h.commission ?? 0), 0),
+    [haulsWithCommission])
 
   const now = new Date()
 
   const thisMonthRevenue = useMemo(() => {
-    const r = completedRides.filter((ride) => {
+    const r = ridesWithFare.filter((ride) => {
       const d = toDate(ride.createdAt)
       return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     }).reduce((s, r) => s + Number(r.fare || 0), 0)
-    const h = completedHauls.filter((haul) => {
+    const h = haulsWithCommission.filter((haul) => {
       const d = toDate(haul.createdAt)
       return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     }).reduce((s, h) => s + Number(h.appCommission ?? h.commission ?? 0), 0)
     return r + h
-  }, [completedRides, completedHauls])
+  }, [ridesWithFare, haulsWithCommission])
 
   const thisWeekRevenue = useMemo(() => {
     const weekStart = new Date(now)
     weekStart.setDate(now.getDate() - now.getDay())
     weekStart.setHours(0, 0, 0, 0)
-    const r = completedRides.filter((ride) => {
+    const r = ridesWithFare.filter((ride) => {
       const d = toDate(ride.createdAt)
       return d && d >= weekStart
     }).reduce((s, r) => s + Number(r.fare || 0), 0)
-    const h = completedHauls.filter((haul) => {
+    const h = haulsWithCommission.filter((haul) => {
       const d = toDate(haul.createdAt)
       return d && d >= weekStart
     }).reduce((s, h) => s + Number(h.appCommission ?? h.commission ?? 0), 0)
     return r + h
-  }, [completedRides, completedHauls])
+  }, [ridesWithFare, haulsWithCommission])
 
   const last30Days = useMemo(() => {
     const days = []

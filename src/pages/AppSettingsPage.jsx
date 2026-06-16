@@ -5,6 +5,30 @@ import { db } from '../firebase'
 import { useDoc } from '../hooks/useDoc.js'
 import Spinner from '../components/Spinner.jsx'
 
+function SettingsInput({ label, value, onChange, type = 'number', note }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+      />
+      {note && <p className="mt-1 text-xs text-gray-400">{note}</p>}
+    </div>
+  )
+}
+
+function SettingsSection({ title, children }) {
+  return (
+    <div>
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>
+    </div>
+  )
+}
+
 const DEFAULT = {
   rideFareBase: 15, rideFarePerKm: 8, rideFareMinimum: 25, rideFareMaximum: 300,
   haulCommission: 75,
@@ -123,22 +147,6 @@ export default function AppSettingsPage() {
     }
   }
 
-  const Input = ({ label, value, onChange, type = 'number', note }) => (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300" />
-      {note && <p className="mt-1 text-xs text-gray-400">{note}</p>}
-    </div>
-  )
-
-  const Section = ({ title, children }) => (
-    <div>
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>
-    </div>
-  )
-
   if (loading) return <div className="flex justify-center p-10"><Spinner /></div>
 
   return (
@@ -151,12 +159,12 @@ export default function AppSettingsPage() {
 
       <form onSubmit={handleSave} className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="space-y-6">
-          <Section title="Ride Fare">
-            <Input label="Base fare ₹" value={form.rideFareBase} onChange={(v) => set('rideFareBase', v)} note="Charged for every ride" />
-            <Input label="Per km ₹" value={form.rideFarePerKm} onChange={(v) => set('rideFarePerKm', v)} note="Rate per kilometre" />
-            <Input label="Minimum fare ₹" value={form.rideFareMinimum} onChange={(v) => set('rideFareMinimum', v)} />
-            <Input label="Maximum fare cap ₹" value={form.rideFareMaximum} onChange={(v) => set('rideFareMaximum', v)} />
-          </Section>
+          <SettingsSection title="Ride Fare">
+            <SettingsInput label="Base fare ₹" value={form.rideFareBase} onChange={(v) => set('rideFareBase', v)} note="Charged for every ride" />
+            <SettingsInput label="Per km ₹" value={form.rideFarePerKm} onChange={(v) => set('rideFarePerKm', v)} note="Rate per kilometre" />
+            <SettingsInput label="Minimum fare ₹" value={form.rideFareMinimum} onChange={(v) => set('rideFareMinimum', v)} />
+            <SettingsInput label="Maximum fare cap ₹" value={form.rideFareMaximum} onChange={(v) => set('rideFareMaximum', v)} />
+          </SettingsSection>
 
           <hr className="border-gray-100" />
 
@@ -164,9 +172,9 @@ export default function AppSettingsPage() {
             <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-gray-500">💸 Taxes & Fees</h3>
             <p className="mb-3 text-xs text-gray-400">Applied to every ride on top of base + distance. Shown in the app's fare breakdown.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Input label="GST %" value={form.gstPercent} onChange={(v) => set('gstPercent', v)} note="5% is standard for ride-share" />
-              <Input label="Platform fee ₹" value={form.platformFee} onChange={(v) => set('platformFee', v)} note="Flat fee per ride" />
-              <Input label="Late night surcharge ₹" value={form.lateNightFee} onChange={(v) => set('lateNightFee', v)} note="Applied 11 PM – 5 AM" />
+              <SettingsInput label="GST %" value={form.gstPercent} onChange={(v) => set('gstPercent', v)} note="5% is standard for ride-share" />
+              <SettingsInput label="Platform fee ₹" value={form.platformFee} onChange={(v) => set('platformFee', v)} note="Flat fee per ride" />
+              <SettingsInput label="Late night surcharge ₹" value={form.lateNightFee} onChange={(v) => set('lateNightFee', v)} note="Applied 11 PM – 5 AM" />
             </div>
           </div>
 
@@ -228,28 +236,28 @@ export default function AppSettingsPage() {
 
           <hr className="border-gray-100" />
 
-          <Section title="Haul Settings">
-            <Input label="App commission ₹" value={form.haulCommission} onChange={(v) => set('haulCommission', v)} note="Fixed commission per haul booking" />
-          </Section>
+          <SettingsSection title="Haul Settings">
+            <SettingsInput label="App commission ₹" value={form.haulCommission} onChange={(v) => set('haulCommission', v)} note="Fixed commission per haul booking" />
+          </SettingsSection>
 
           <hr className="border-gray-100" />
 
-          <Section title="Service Zone">
+          <SettingsSection title="Service Zone">
             <div>
               <p className="mb-2 text-xs font-medium text-gray-600">South-West boundary</p>
               <div className="grid grid-cols-2 gap-2">
-                <Input label="Lat" value={form.serviceZoneSW.lat} onChange={(v) => setSW('lat', v)} />
-                <Input label="Lng" value={form.serviceZoneSW.lng} onChange={(v) => setSW('lng', v)} />
+                <SettingsInput label="Lat" value={form.serviceZoneSW.lat} onChange={(v) => setSW('lat', v)} />
+                <SettingsInput label="Lng" value={form.serviceZoneSW.lng} onChange={(v) => setSW('lng', v)} />
               </div>
             </div>
             <div>
               <p className="mb-2 text-xs font-medium text-gray-600">North-East boundary</p>
               <div className="grid grid-cols-2 gap-2">
-                <Input label="Lat" value={form.serviceZoneNE.lat} onChange={(v) => setNE('lat', v)} />
-                <Input label="Lng" value={form.serviceZoneNE.lng} onChange={(v) => setNE('lng', v)} />
+                <SettingsInput label="Lat" value={form.serviceZoneNE.lat} onChange={(v) => setNE('lat', v)} />
+                <SettingsInput label="Lng" value={form.serviceZoneNE.lng} onChange={(v) => setNE('lng', v)} />
               </div>
             </div>
-          </Section>
+          </SettingsSection>
 
           <hr className="border-gray-100" />
 

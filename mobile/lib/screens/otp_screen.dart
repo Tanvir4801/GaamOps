@@ -206,6 +206,30 @@ class _OtpScreenState extends State<OtpScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
 
+      String _roleLabel(String role) {
+        switch (role) {
+          case 'saathi':     return 'Gaam Saathi';
+          case 'haul_owner': return 'Vehicle Owner (GaamHaul)';
+          default:           return 'Customer';
+        }
+      }
+
+      String _roleEmoji(String role) {
+        switch (role) {
+          case 'saathi':     return '🛵';
+          case 'haul_owner': return '🚛';
+          default:           return '👤';
+        }
+      }
+
+      Color _roleColor(String role) {
+        switch (role) {
+          case 'saathi':     return AppColors.primaryOrange;
+          case 'haul_owner': return const Color(0xFF5D4037);
+          default:           return AppColors.primaryGreen;
+        }
+      }
+
       final choice = await showDialog<String>(
         context: context,
         barrierDismissible: false,
@@ -223,15 +247,13 @@ class _OtpScreenState extends State<OtpScreen> {
           ]),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             Text(
-              'આ નંબર પહેલેથી ${savedRole == 'saathi' ? 'Gaam Saathi' : 'Customer'} '
-              'તરીકે નોંધાયેલ છે.',
+              'આ નંબર પહેલેથી ${_roleLabel(savedRole)} તરીકે નોંધાયેલ છે.',
               style: const TextStyle(fontSize: 13, color: AppColors.textGrey),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
             Text(
-              'This number is already registered as '
-              '${savedRole == 'saathi' ? 'Gaam Saathi' : 'Customer'}.',
+              'This number is already registered as ${_roleLabel(savedRole)}.',
               style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
               textAlign: TextAlign.center,
             ),
@@ -243,17 +265,14 @@ class _OtpScreenState extends State<OtpScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: savedRole == 'saathi'
-                      ? AppColors.primaryOrange : AppColors.primaryGreen,
+                  backgroundColor: _roleColor(savedRole),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: () => Navigator.pop(context, savedRole),
                 child: Text(
-                  savedRole == 'saathi'
-                      ? '🛵 Gaam Saathi તરીકે ચાલુ'
-                      : '👤 Customer તરીકે ચાલુ',
+                  '${_roleEmoji(savedRole)} ${_roleLabel(savedRole)} તરીકે ચાલુ',
                   style: const TextStyle(
                       color: Colors.white, fontWeight: FontWeight.bold),
                 ),
@@ -272,9 +291,7 @@ class _OtpScreenState extends State<OtpScreen> {
                 ),
                 onPressed: () => Navigator.pop(context, loginRole),
                 child: Text(
-                  loginRole == 'saathi'
-                      ? '🛵 Saathi તરીકે Switch કરો'
-                      : '👤 Customer તરીકે Switch કરો',
+                  '${_roleEmoji(loginRole)} ${_roleLabel(loginRole)} તરીકે Switch કરો',
                   style: const TextStyle(color: AppColors.textGrey),
                 ),
               ),
@@ -305,6 +322,8 @@ class _OtpScreenState extends State<OtpScreen> {
         } else {
           _goRemoveAll(const SaathiMainShell());
         }
+      } else if (choice == 'haul_owner') {
+        _goRemoveAll(const HaulOwnerShell());
       } else {
         _goRemoveAll(const CustomerMainShell());
       }

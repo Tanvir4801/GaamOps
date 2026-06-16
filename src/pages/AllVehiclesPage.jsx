@@ -13,6 +13,22 @@ const EMPTY_FORM = {
   vehicleType: 'mini_tempo', capacity: '', ratePerHour: '', vehicleNumber: '', isAvailable: true,
 }
 
+function VehicleField({ label, name, type = 'text', value, onChange, children }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
+      {children || (
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(name, e.target.value)}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+        />
+      )}
+    </div>
+  )
+}
+
 export default function AllVehiclesPage() {
   const { data: vehicles, loading } = useCollection('haul_vehicles', orderBy('createdAt', 'desc'))
   const [confirm, setConfirm] = useState(null)
@@ -20,6 +36,8 @@ export default function AllVehiclesPage() {
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+
+  const handleChange = (name, value) => setForm((prev) => ({ ...prev, [name]: value }))
 
   const openAdd = () => { setForm(EMPTY_FORM); setEditTarget(null); setShowAdd(true) }
   const openEdit = (v) => {
@@ -75,16 +93,6 @@ export default function AllVehiclesPage() {
     }
     setConfirm(null)
   }
-
-  const F = ({ label, name, type = 'text', children }) => (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
-      {children || (
-        <input type={type} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300" />
-      )}
-    </div>
-  )
 
   return (
     <div className="space-y-4">
@@ -155,23 +163,25 @@ export default function AllVehiclesPage() {
               <button type="button" onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <form onSubmit={handleSave} className="space-y-3">
-              {!editTarget && <F label="Firebase Auth UID *" name="uid" />}
+              {!editTarget && (
+                <VehicleField label="Firebase Auth UID *" name="uid" value={form.uid} onChange={handleChange} />
+              )}
               <div className="grid grid-cols-2 gap-3">
-                <F label="Owner Name *" name="ownerName" />
-                <F label="Phone *" name="phone" />
-                <F label="Village *" name="village" />
-                <F label="Vehicle Number *" name="vehicleNumber" />
-                <F label="Capacity *" name="capacity" />
-                <F label="Rate per Hour (₹) *" name="ratePerHour" type="number" />
+                <VehicleField label="Owner Name *" name="ownerName" value={form.ownerName} onChange={handleChange} />
+                <VehicleField label="Phone *" name="phone" value={form.phone} onChange={handleChange} />
+                <VehicleField label="Village *" name="village" value={form.village} onChange={handleChange} />
+                <VehicleField label="Vehicle Number *" name="vehicleNumber" value={form.vehicleNumber} onChange={handleChange} />
+                <VehicleField label="Capacity *" name="capacity" value={form.capacity} onChange={handleChange} />
+                <VehicleField label="Rate per Hour (₹) *" name="ratePerHour" type="number" value={form.ratePerHour} onChange={handleChange} />
               </div>
-              <F label="Vehicle Type *" name="vehicleType">
-                <select value={form.vehicleType} onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}
+              <VehicleField label="Vehicle Type *" name="vehicleType" value={form.vehicleType} onChange={handleChange}>
+                <select value={form.vehicleType} onChange={(e) => handleChange('vehicleType', e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300">
                   {VEHICLE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
-              </F>
+              </VehicleField>
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={form.isAvailable} onChange={(e) => setForm({ ...form, isAvailable: e.target.checked })} />
+                <input type="checkbox" checked={form.isAvailable} onChange={(e) => handleChange('isAvailable', e.target.checked)} />
                 Available
               </label>
               <div className="flex justify-end gap-3 pt-2">
