@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../login_screen.dart';
-
+import 'vahan_saathi_choice_screen.dart';
 class VahanSaathiWelcomeScreen extends StatefulWidget {
   const VahanSaathiWelcomeScreen({super.key});
 
@@ -206,12 +206,14 @@ class _VahanSaathiWelcomeScreenState extends State<VahanSaathiWelcomeScreen>
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18)),
                   ),
-                  onPressed: () => Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const LoginScreen(role: 'haul_owner')),
-                  ),
+                 onPressed: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const VahanSaathiChoiceScreen(),
+    ),
+  );
+},
                   child: const Text(
                     'વાહન જોડો — Register Now',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),

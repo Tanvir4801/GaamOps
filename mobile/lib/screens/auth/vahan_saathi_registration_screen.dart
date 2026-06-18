@@ -11,20 +11,20 @@ import '../../widgets/village_selector_sheet.dart';
 import '../haul_owner/vahan_saathi_pending_screen.dart';
 
 class VahanSaathiRegistrationScreen extends StatefulWidget {
-  final String uid;
-  final String phone;
+  final String? uid;
+  final String? phone;
 
   const VahanSaathiRegistrationScreen({
     super.key,
-    required this.uid,
-    required this.phone,
+    this.uid,
+    this.phone,
   });
 
   @override
   State<VahanSaathiRegistrationScreen> createState() =>
       _VahanSaathiRegistrationScreenState();
 }
-
+  
 class _VahanSaathiRegistrationScreenState
     extends State<VahanSaathiRegistrationScreen> {
   final _pageCtrl = PageController();
@@ -123,8 +123,11 @@ class _VahanSaathiRegistrationScreenState
       return;
     }
     setState(() => _isLoading = true);
-    try {
-      final uid = widget.uid;
+    
+      try {
+         final uid = widget.uid ??
+            FirebaseAuth.instance.currentUser?.uid ??
+           DateTime.now().millisecondsSinceEpoch.toString();
       final base = 'vahan_saathi/$uid';
 
       // Upload all files in parallel
@@ -161,7 +164,7 @@ class _VahanSaathiRegistrationScreenState
           'uid': uid,
           'name': _nameCtrl.text.trim(),
           'displayName': _nameCtrl.text.trim(),
-          'phone': widget.phone,
+          'phone': widget.phone ?? '',
           'role': 'haul_owner',
           'village': _village!.name,
           'profilePhoto': profileUrl,
@@ -177,7 +180,7 @@ class _VahanSaathiRegistrationScreenState
         {
           'uid': uid,
           'ownerName': _nameCtrl.text.trim(),
-          'phone': widget.phone,
+          'phone': widget.phone ?? '',
           'village': _village!.name,
           'vehicleType': _vehicleType,
           'vehicleBrand': _vehicleBrandCtrl.text.trim(),
@@ -210,22 +213,47 @@ class _VahanSaathiRegistrationScreenState
 
       await batch.commit();
 
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-            builder: (_) => VahanSaathiPendingScreen(uid: uid)),
-        (_) => false,
+  
+
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+
+      context,
+
+      MaterialPageRoute(
+
+        builder: (_) => VahanSaathiPendingScreen(uid: uid),
+
+      ),
+
+      (route) => false,
+
+    );
+
+  } catch (e) {
+
+    if (mounted) {
+
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+
+        SnackBar(
+
+          content: Text('Registration failed: $e'),
+
+          backgroundColor: Colors.red,
+
+        ),
+
       );
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Registration failed: $e'),
-                backgroundColor: Colors.red));
-      }
+
     }
+
   }
+
+}
 
   @override
   void dispose() {

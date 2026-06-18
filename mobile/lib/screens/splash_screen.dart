@@ -186,7 +186,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                 // Tagline box
                 SizedBox(
-                  height: 130,
+                  height: 150,
                   child: _showTagline
                     ? FadeTransition(
                         opacity: _taglineFade,

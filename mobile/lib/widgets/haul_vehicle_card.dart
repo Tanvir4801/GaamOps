@@ -15,13 +15,32 @@ class HaulVehicleCard extends StatelessWidget {
     required this.onBook,
   });
 
-  IconData get _vehicleIcon {
-    switch (vehicle.vehicleType) {
-      case HaulVehicleModel.tractor: return Icons.agriculture;
-      case HaulVehicleModel.truck407: return Icons.local_shipping;
-      default: return Icons.local_taxi;
-    }
+ IconData get _vehicleIcon {
+  switch (vehicle.vehicleType) {
+    case HaulVehicleModel.tractor:
+      return Icons.agriculture;
+
+    case HaulVehicleModel.eicherTruck:
+      return Icons.local_shipping;
+
+    case HaulVehicleModel.chhotaHathi:
+    case HaulVehicleModel.tataAceGold:
+    case HaulVehicleModel.mahindraJeeto:
+    case HaulVehicleModel.ashokLeylandDost:
+    case HaulVehicleModel.marutiSuperCarry:
+      return Icons.fire_truck;
+
+    case HaulVehicleModel.boleroPickup:
+    case HaulVehicleModel.tataYodha:
+      return Icons.local_shipping;
+
+    case HaulVehicleModel.cargoTempo:
+      return Icons.delivery_dining;
+
+    default:
+      return Icons.local_shipping;
   }
+}
 
   @override
   Widget build(BuildContext context) {

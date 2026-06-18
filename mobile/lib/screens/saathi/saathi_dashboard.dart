@@ -456,7 +456,7 @@ class _SaathiDashboardState extends State<SaathiDashboard>
                       '"તમારી ગાડી, તમારી કમાણી.\n'
                       'GaamRide સાથે આજે જ Online થાઓ!"',
                       style: TextStyle(fontSize: 13,
-                          color: Colors.white80, height: 1.5)),
+                          color: Colors.white, height: 1.5)),
                     const SizedBox(height: 16),
                     Row(children: [
                       _statPill('💰', 'Avg ₹400/day'),
