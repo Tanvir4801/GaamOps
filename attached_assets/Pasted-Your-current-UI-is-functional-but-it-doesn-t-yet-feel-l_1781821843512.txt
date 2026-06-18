@@ -1,0 +1,1393 @@
+Your current UI is functional, but it doesn’t yet feel like a trusted commercial logistics platform. Right now it looks like a student project. For a village transport app like GaamHaul, the profile and dashboard should feel more like Uber Driver, Porter Partner, or Rapido Captain.
+
+Give this prompt to Replit:
+
+Upgrade the entire Vahan Saathi (Vehicle Owner) experience to a production-level logistics partner app with a premium brown theme (#5D4037, #8D6E63, #EFEBE9).
+
+OBJECTIVE:
+Make Vahan Saathi feel trustworthy, professional, and business-oriented for vehicle owners in villages and towns.
+
+========================
+
+ 
+
+PROFILE SCREEN REDESIGN
+
+Replace current profile UI with premium card-based design.
+
+Top Header:
+
+Gradient Brown Header
+Large circular profile photo
+Owner Name
+Verified Badge (blue tick if approved)
+Vehicle Type
+Village Name
+Join Date
+Online / Offline Status Indicator
+Statistics Row:
+
+Total Jobs Completed
+Total Earnings
+Rating
+Active Since
+Vehicle Information Card:
+
+Vehicle Photo
+Vehicle Type
+Brand
+Model
+Vehicle Number
+Capacity
+Rate Per Hour
+Availability Status
+Documents Status Card:
+Show:
+
+Driving Licence
+RC Book
+Vehicle Photo
+Insurance
+PUC
+Each document should display:
+
+Verified
+Pending
+Missing
+Financial Information Card:
+
+UPI ID
+Bank Account (masked)
+IFSC
+Last Payment Received
+Performance Card:
+
+Total Bookings
+Accepted Jobs
+Rejected Jobs
+Completion Rate %
+Customer Rating
+Quick Actions:
+
+Edit Profile
+Edit Vehicle Details
+Upload Missing Documents
+Support Center
+Share App
+Logout
+========================
+
+ 
+
+DASHBOARD REDESIGN
+
+Replace current dashboard with premium partner dashboard.
+
+Header:
+
+Greeting (Good Morning Yash)
+Vehicle Image
+Online Status Toggle
+Notification Bell
+Today’s Performance Cards:
+
+Earnings Today
+Total Jobs
+Pending Requests
+Rating
+Vehicle Status Card:
+
+Vehicle Name
+Vehicle Number
+Capacity
+Current Availability
+Booking Requests Section:
+Show latest incoming booking requests.
+
+Each booking card:
+
+Customer Name
+Pickup Village
+Drop Village
+Distance
+Load Type
+Estimated Fare
+Accept Button
+Reject Button
+Recent Activity Section:
+
+Last 10 jobs
+Earnings Analytics:
+
+Today
+This Week
+This Month
+Mini charts using FL Chart.
+
+========================
+
+ 
+
+NEW FIRESTORE FIELDS
+
+haul_vehicles collection:
+
+vehicleBrand
+vehicleModel
+vehiclePhotoUrl
+capacity
+ratePerHour
+status
+isVerified
+isOnline
+totalBookings
+completedBookings
+cancelledBookings
+totalEarnings
+rating
+joinedAt
+lastActive
+
+========================
+
+ 
+
+PREMIUM DESIGN
+
+Use:
+
+Rounded cards (20px)
+Soft shadows
+Brown gradients
+Modern typography
+Premium spacing
+Smooth animations
+Skeleton loaders
+Shimmer loading effects
+Empty state illustrations
+========================
+
+ 
+
+ADMIN PANEL
+
+Admin should see:
+
+Owner Details
+Vehicle Details
+Document Preview
+Approval Buttons
+Reject With Reason
+Online Status
+Total Jobs
+Total Earnings
+
+Admin can:
+
+Approve Vehicle
+Reject Vehicle
+Block Vehicle
+Unblock Vehicle
+ FINAL GOAL
+
+UI quality should look similar to:
+
+Uber Driver
+Porter Partner
+Rapido Captain
+Fully responsive Flutter implementation.
+Maintain existing Firebase structure and migrate data safely.
+
+Also, change the vehicle label display.
+
+Currently showing:
+
+truck_407
+Instead show:
+
+🚛 Eicher Truck 407
+or
+
+🚚 Tata Ace Gold CNG
+using the vehicleTypeLabel getter from your HaulVehicleModel.
+
+That one change alone will make the dashboard look much more professional.
+
+
+
+
+
+Upgrade GaamRide Admin Panel to enterprise logistics management system.
+
+
+
+Create Vehicle Verification Center.
+
+
+
+Features:
+
+
+
+- Vehicle owner profile view
+
+- Vehicle image gallery
+
+- DL Front and Back preview
+
+- RC preview
+
+- Insurance preview
+
+- PUC preview
+
+
+
+Verification Workflow:
+
+draft
+
+pending
+
+under_review
+
+changes_requested
+
+approved
+
+blocked
+
+suspended
+
+
+
+Pricing Management:
+
+Admin can set minRate and maxRate per vehicle type.
+
+
+
+Owner can edit rate only within allowed limits.
+
+
+
+Add app_settings/pricing collection.
+
+
+
+Create analytics dashboard:
+
+- Total Vehicles
+
+- Online Vehicles
+
+- Pending Verifications
+
+- Approved Vehicles
+
+- Revenue Analytics
+
+- Village Wise Distribution
+
+
+
+Create professional brown theme matching mobile app:
+
+Primary: #5D4037
+
+Secondary: #8D6E63
+
+Background: #EFEBE9
+
+
+
+UI quality similar to Uber Fleet and Porter Partner Admin.
+
+
+
+Use this Replit prompt:
+
+Upgrade GaamRide Bike Saathi module to production level with a premium village-friendly UI matching the brown theme used in Vahan Saathi.
+
+REGISTRATION FLOW
+
+Create a simple 4-step registration process.
+
+Step 1: Personal Information
+
+Full Name (required)
+Mobile Number (required)
+Village (required)
+Profile Photo (optional)
+Step 2: Bike Information
+
+Vehicle Number (required)
+Bike Brand (optional)
+Bike Model (optional)
+Vehicle Photo (optional)
+Step 3: Verification Documents
+
+Driving License (optional)
+RC Book (optional)
+Insurance (optional)
+Display message:
+“Upload now or later from Profile”
+
+Do NOT block registration if documents are missing.
+
+Step 4: Review & Submit
+
+Summary Card
+Terms & Conditions
+Submit Button
+VERIFICATION SYSTEM
+
+Create verification levels:
+
+Level 1:
+Basic Registered
+No documents required
+
+Level 2:
+Verified Rider
+DL uploaded and approved
+
+Level 3:
+Trusted Rider
+DL + RC uploaded
+Good rating
+Completed rides
+
+Store fields:
+
+verificationLevel
+trustScore
+documentsUploaded
+isVerified
+
+PROFILE SCREEN REDESIGN
+
+Create premium profile screen with:
+
+Hero Header
+
+Profile Photo
+Name
+Village
+Member Since
+Verification Badge
+Trust Score %
+Vehicle Card
+
+Bike Photo
+Vehicle Number
+Bike Brand
+Bike Model
+Verification Card
+
+Profile Verified
+DL Status
+RC Status
+Insurance Status
+Performance Card
+
+Total Rides
+Completed Rides
+Cancelled Rides
+Rating
+Earnings Card
+
+Today Earnings
+Weekly Earnings
+Monthly Earnings
+Lifetime Earnings
+Settings Section
+
+Edit Profile
+Upload Documents
+Change Vehicle Details
+Support
+Logout
+DASHBOARD IMPROVEMENTS
+
+Add:
+
+Online/Offline Toggle
+Today’s Earnings
+Weekly Earnings
+Total Rides
+Rating
+Acceptance Rate
+Completion Rate
+Show active vehicle card with:
+
+Vehicle Number
+Vehicle Type
+Current Status
+Rate Per Ride
+ADMIN PANEL UPGRADE
+
+Bike Saathi Management
+
+Table Columns:
+
+Photo
+Name
+Phone
+Village
+Vehicle Number
+Verification Status
+Trust Score
+Total Rides
+Status
+Actions:
+
+View Profile
+Approve
+Reject
+Request Documents
+Block User
+Add Verification Center:
+
+Tabs:
+
+Pending
+Verified
+Rejected
+Blocked
+ANALYTICS
+
+Admin Dashboard Cards:
+
+Total Riders
+Active Riders
+Verified Riders
+Pending Verification
+Total Rides Today
+Revenue Today
+Charts:
+
+Village Wise Riders
+Daily Rides
+Revenue Trend
+Verification Status
+UI DESIGN
+
+Theme:
+Primary Brown #5D4037
+Secondary Brown #8D6E63
+Background #EFEBE9
+
+Use:
+
+Modern cards
+Soft shadows
+Rounded corners
+Premium animations
+Trust badges
+Professional logistics app feel
+Reference:
+Rapido Captain + Uber Driver + Porter Partner
+
+Code should be production-ready, responsive, and use Firestore efficiently.  Your app already looks much better than a college project. The next step is making it feel like a real product people trust, similar to Uber, Rapido, Porter, Ola, and Amazon.
+
+Biggest Improvements Needed
+
+1. Customer Home Screen
+
+Current issue:
+
+Too much empty space
+No trust signals
+Doesn’t immediately tell users why GaamRide is useful
+Add a hero card:
+
+🚖 GaamRide Trusted Village Transport
+
+✅ 5000+ Rides Completed
+✅ Verified Drivers
+✅ Live Tracking
+✅ Emergency Support
+
+Book in less than 30 seconds
+Below that:
+
+Recent Booking
+Favourite Route
+Quick Book Again
+Popular Destinations
+2. Live Driver Availability
+
+Show:
+
+🚖 Available Now
+
+Bike Riders: 12
+Mini Tempo: 4
+Pickup: 3
+Tractor: 2
+Village users instantly trust that vehicles are actually available.
+
+3. Trust & Safety Section
+
+Add on home page:
+
+🛡 Your Safety First
+
+Verified Drivers
+Emergency Contact
+Trip Tracking
+Support Team
+Very important psychologically.
+
+4. Driver Card Upgrade
+
+Instead of only vehicle:
+
+Yash Patel
+⭐ 4.9
+245 Trips
+
+Verified Driver Badge
+Member Since 2025
+Users trust people, not vehicles.
+
+5. Booking Experience
+
+After vehicle selection:
+
+Driver Photo
+Driver Name
+Vehicle Number
+Rating
+Estimated Arrival
+Like Uber.
+
+6. Ride History Upgrade
+
+Current is good but add:
+
+Repeat Ride
+Rate Driver
+Download Receipt
+Support
+For every ride card.
+
+7. Profile Upgrade
+
+Current profile looks basic.
+
+Add:
+
+Trust Level
+
+Bronze
+Silver
+Gold
+
+based on completed rides
+Also:
+
+Member Since
+Saved Addresses
+Emergency Contacts
+Referral Earnings
+8. Loyalty Program
+
+Village users love rewards.
+
+Add:
+
+GaamPoints
+
+1 ride = 10 points
+
+100 points = ₹10 coupon
+9. Saved Locations
+
+Allow:
+
+Home
+Farm
+Market
+School
+Hospital
+Temple
+One-tap booking.
+
+10. Emergency Feature
+
+Very useful.
+
+SOS Button
+
+Call Family
+Call Driver
+Call Support
+Share Live Location
+Replit Master Prompt
+
+Upgrade the entire GaamRide customer application to a production-level village transportation platform.
+
+GOAL
+
+Create a premium, trustworthy, modern mobile experience inspired by Uber, Rapido, Ola, Porter, Amazon and Google Maps while maintaining a rural Gujarat identity.
+
+THEME
+
+Primary Green: #007A1F
+Secondary Green: #2E7D32
+Background: #F8F9FA
+
+Use:
+
+Premium cards
+Soft shadows
+Modern typography
+Smooth animations
+Professional spacing
+Trust-focused UI
+HOME SCREEN
+
+Redesign home screen completely.
+
+Add:
+
+Hero Section:
+
+Personalized greeting
+Weather widget
+Current village
+Trust banner
+Trust Banner:
+
+Verified Drivers
+Live Tracking
+Emergency Support
+Safe Payments
+Quick Actions:
+
+Book Ride
+Book Vehicle
+Repeat Last Ride
+Favourite Routes
+Live Availability Section:
+
+Available Bike Riders
+Available Mini Tempo
+Available Pickups
+Available Tractors
+Popular Destinations:
+
+Market
+Hospital
+School
+Bus Station
+Temple
+Recent Activity:
+
+Last Ride
+Last Booking
+Quick Rebook
+BOOKING EXPERIENCE
+
+Add:
+
+Driver profile preview
+Driver rating
+Driver completed rides
+Estimated arrival time
+Vehicle verification badge
+Fare breakdown
+Live booking progress
+HISTORY SCREEN
+
+Upgrade ride history.
+
+Each ride card should include:
+
+Route
+Date
+Time
+Driver
+Vehicle
+Fare
+Status
+Actions:
+
+Book Again
+Rate Driver
+Download Receipt
+Contact Support
+Add filters:
+
+Completed
+Cancelled
+Upcoming
+Vehicle Bookings
+PROFILE SCREEN
+
+Create premium profile.
+
+Sections:
+
+Profile Header:
+
+Photo
+Name
+Phone
+Village
+Member Since
+Verification Badge
+Stats:
+
+Total Rides
+Total Spent
+Saved Amount
+Referral Earnings
+Trust Score:
+
+Bronze
+Silver
+Gold
+Platinum
+Saved Locations:
+
+Home
+Farm
+Market
+School
+Hospital
+Emergency Contacts
+
+Referral System
+
+GaamPoints Loyalty Program
+
+Settings:
+
+Language
+Notifications
+Dark Mode
+Privacy
+Support
+TRUST FEATURES
+
+Implement:
+
+Verified Driver Badge
+Verified Vehicle Badge
+Emergency SOS
+Share Trip
+Live Tracking
+Driver Ratings
+Trip Receipts
+LOYALTY SYSTEM
+
+GaamPoints
+
+Rules:
+
+1 ride = 10 points
+Referral = 100 points
+Reviews = 5 points
+Reward redemption support.
+
+ADMIN FEATURES
+
+Add analytics for:
+
+Total Users
+Active Users
+Daily Bookings
+Revenue
+Popular Villages
+Driver Ratings
+Vehicle Usage
+Create a premium production-ready UI suitable for launch on Play Store and App Store.
+
+If you implement even 60–70% of this, GaamRide will start feeling like a genuine commercial village mobility platform rather than a student project.
+
+
+
+
+
+
+
+Yes. Looking at the Bike Saathi screen, it’s already decent, but it still feels like a registration page, not a professional earning opportunity platform.
+
+For villagers, the first question is:
+
+“મને કેટલા રૂપિયા મળશે?” (How much can I earn?)
+
+Not features.
+
+So the screen should focus on earning, trust, simplicity, and local identity.
+
+Bike Saathi Welcome Screen Structure
+
+Hero Section
+
+🛵 GaamRide Bike Saathi
+
+Earn from rides in your village
+
+₹400–₹800 Daily Income
+₹8,000–₹20,000 Monthly
+
+Join 200+ Local Riders
+Button:
+
+હવે જોડાઓ / Join Now
+Secondary:
+
+Already Registered? Login
+Replace Benefits Section
+
+Current benefits are okay but too generic.
+
+Use:
+
+💰 Daily Earnings
+Earn ₹400–₹800/day
+
+⏰ Work Anytime
+No fixed timings
+
+🏡 Village Routes Only
+No city traffic
+
+📱 Gujarati App
+Easy to use
+
+🛡 Secure Payments
+Weekly payouts
+
+⭐ Verified Customers
+Safer bookings
+Trust Section
+
+Add:
+
+Why Villagers Trust GaamRide
+
+✓ Local Village Platform
+✓ Verified Riders
+✓ Transparent Earnings
+✓ WhatsApp Support
+✓ Gujarati Language
+Real Statistics Card
+
+🚀 Platform Stats
+
+250+ Registered Riders
+5000+ Completed Rides
+15+ Villages Connected
+4.8 Average Rating
+Registration Flow (Same Style as Vahan Saathi)
+
+Step 1
+
+Personal Details
+
+Name
+Phone
+Village
+Profile Photo
+Step 2
+
+Bike Details
+
+Bike Number
+Bike Brand
+Bike Model
+Bike Photo
+Step 3
+
+Optional Verification
+
+Driving License
+RC Book
+Insurance
+
+Upload now or later
+Step 4
+
+Review
+
+Summary Card
+
+Terms
+
+Submit
+Login Screen
+
+Create separate card:
+
+Welcome Back
+
+Enter Mobile Number
+
+[ Continue ]
+
+New User?
+Register as Bike Saathi
+After Registration
+
+Show pending screen like Vahan Saathi.
+
+Status:
+
+Pending Review
+Verified
+Rejected
+Blocked
+Replit Prompt
+
+Redesign Bike Saathi onboarding, registration, login, and verification flow to match Vahan Saathi quality and create a professional earning platform.
+
+GOAL
+
+Bike Saathi should feel like Rapido Captain + Uber Driver + Village Transport Partner.
+
+THEME
+
+Primary Orange: #F4511E
+Secondary Orange: #FF7043
+Background: #FFF8F5
+
+WELCOME SCREEN
+
+Replace current design.
+
+Hero Section:
+
+🛵 GaamRide Bike Saathi
+
+Earn Money in Your Village
+
+₹400–₹800 Daily Income
+₹8,000–₹20,000 Monthly Potential
+
+Join 200+ Riders
+
+Primary CTA:
+“Register as Bike Saathi”
+
+Secondary CTA:
+“Already Registered? Login”
+
+BENEFITS SECTION
+
+Show cards:
+
+Earn Daily Income
+Work Anytime
+Village Routes Only
+Gujarati App
+Secure Payments
+Verified Customers
+TRUST SECTION
+
+Why Join GaamRide:
+
+✓ Local Village Platform
+✓ Verified Customers
+✓ Weekly Earnings
+✓ WhatsApp Support
+✓ Gujarati Language
+✓ Simple Registration
+
+STATISTICS SECTION
+
+Platform Stats:
+
+Registered Riders
+Completed Rides
+Connected Villages
+Average Rating
+TESTIMONIAL SECTION
+
+Show real rider cards:
+
+Photo
+Name
+Village
+Monthly Earnings
+Review
+
+LOGIN SCREEN
+
+Create modern login screen.
+
+Fields:
+
+Mobile Number
+Buttons:
+
+Continue
+Register as New Rider
+REGISTRATION FLOW
+
+Use same multi-step structure as Vahan Saathi.
+
+Step 1:
+Personal Information
+
+Name
+Phone
+Village
+Profile Photo
+Step 2:
+Bike Information
+
+Vehicle Number
+Bike Brand
+Bike Model
+Vehicle Photo
+Step 3:
+Verification Documents
+
+Optional:
+
+Driving License
+RC Book
+Insurance
+Show:
+“Upload now or later from Profile”
+
+Step 4:
+Review & Submit
+
+Verification Status:
+
+Pending
+Verified
+Rejected
+Blocked
+AFTER REGISTRATION
+
+Create Bike Saathi Pending Screen similar to Vahan Saathi.
+
+Show:
+
+Registration Complete
+Documents Under Review
+Account Activation
+PROFILE SCREEN
+
+Add:
+
+Profile Header
+Trust Score
+Verification Badge
+Vehicle Details
+Completed Rides
+Monthly Earnings
+Rating
+Support
+
+Use premium cards, smooth animations, Gujarati-friendly UI, and production-level design.
+
+Also, I would keep Bike Saathi orange, Vahan Saathi brown, and Customer app green. That color separation makes the whole GaamRide ecosystem feel much more professional and easier to understand. 
+
+
+
+Upgrade Bike Saathi module to production-level quality.
+
+
+
+Improve Dashboard:
+
+
+
+1. Add Today's Earnings Target card with progress bar.
+
+2. Add Online Time tracker.
+
+3. Add Acceptance Rate card.
+
+4. Add Cancellation Rate card.
+
+5. Add Popular Routes section.
+
+6. Add Rider Level and Achievement system.
+
+7. Add Village Ranking card.
+
+8. Add Weekly Performance chart.
+
+
+
+Improve Earnings Screen:
+
+
+
+1. Earnings Breakdown:
+
+   - Customer Fare
+
+   - Platform Fee
+
+   - Net Earnings
+
+
+
+2. Available Balance Card.
+
+3. Withdraw Earnings button.
+
+4. Monthly Growth comparison.
+
+5. Last 30 days chart.
+
+
+
+Improve Profile Screen:
+
+
+
+1. Verified Rider badge.
+
+2. Trust Score (0-100).
+
+3. Documents status section.
+
+4. Vehicle details card.
+
+5. Emergency support section.
+
+6. Referral program card.
+
+7. Member since date.
+
+8. Profile completion percentage.
+
+
+
+Add Bike Saathi Pending Screen:
+
+
+
+- Registration Submitted
+
+- Under Review
+
+- Approved
+
+- Rejected
+
+
+
+Include progress timeline and support contact.
+
+
+
+Design Requirements:
+
+
+
+- Premium orange theme.
+
+- Modern rounded cards.
+
+- Consistent spacing.
+
+- Gujarati + English support.
+
+- Smooth animations.
+
+- Production-ready UI.
+
+- Similar quality to Rapido Captain and Uber Driver apps.This direction is much stronger. Instead of looking like a booking app, it will feel like a village mobility ecosystem.
+
+Copy this Replit prompt:
+
+Redesign the GaamRide welcome screen from scratch with a premium startup-quality onboarding experience.
+
+Theme:
+GaamRide is not just a ride booking app. It is a complete village transportation network connecting people, riders, truck owners, tractor owners and local businesses.
+
+Hero Section:
+
+Large premium header with modern village-inspired design.
+
+Main Title:
+GaamRide
+
+Gujarati Tagline:
+ગામનો પોતાનો ટ્રાન્સપોર્ટ નેટવર્ક
+
+Subtitle:
+
+For People
+For Riders
+For Vehicle Owners
+
+Design Style:
+
+Modern glassmorphism
+Soft gradients
+Premium shadows
+Rounded 28-32px corners
+Apple-level spacing
+Smooth animations
+Gujarati-first design
+Premium startup feel
+Background Design:
+
+Do NOT use plain gradients.
+
+Create subtle village-inspired artwork:
+
+Curved village roads
+Farm field patterns
+Tractor route lines
+Small village location markers
+Soft landscape silhouettes
+Abstract transportation network
+Keep everything minimal and elegant.
+
+Color Palette:
+
+Customer:
+#008A2E Green
+
+Gaam Saathi:
+#FF5A00 Orange
+
+Vahan Saathi:
+#6D4C41 Brown
+
+Background:
+Warm off-white (#F8F6F2)
+
+Role Selection Section:
+
+Heading:
+
+Choose Your Journey
+
+Subheading:
+
+How would you like to use GaamRide today?
+
+Create 3 premium glass cards.
+
+Do NOT use simple buttons.
+
+Each card should feel like a separate path.
+
+CARD 1
+
+Customer
+
+Need Transport?
+
+Book rides across villages
+
+Features:
+• Fast Booking
+• Trusted Local Drivers
+• Village-to-Village Travel
+
+Badge:
+42+ Villages Connected
+
+Visual:
+Village road illustration
+
+Green theme
+
+CARD 2
+
+Gaam Saathi
+
+Want To Earn?
+
+Become a rider partner
+
+Features:
+• Flexible Hours
+• Daily Earnings
+• Local Customers
+
+Badge:
+Avg ₹500/day
+
+Visual:
+Modern bike rider illustration
+
+Orange theme
+
+CARD 3
+
+Vahan Saathi
+
+Own a Vehicle?
+
+Truck • Tractor • Tempo Partner
+
+Features:
+• Goods Transport
+• Farm Logistics
+• Village Deliveries
+
+Badge:
+₹500–₹3000/day
+
+Visual:
+Freight vehicle illustration
+
+Brown theme
+
+Card Design:
+
+Glassmorphism
+Frosted background
+Soft blur
+Floating shadows
+Gradient overlays
+Premium badges
+Animated hover/tap effect
+Scale animation on press
+Bottom Trust Section:
+
+Instead of boring icons, create one premium trust card.
+
+Content:
+
+🛡 Trusted by Villages
+
+✓ Local Drivers
+✓ Transparent Pricing
+✓ Gujarati Support
+✓ Safe Transportation
+
+Show:
+
+⭐⭐⭐⭐⭐ 4.9 Rating
+
+Serving Mahuva Taluka • Surat • Gujarat
+
+Micro Animations:
+
+Floating vehicle illustrations
+Slow moving route lines
+Card lift effect
+Hero fade animation
+Premium entrance transitions
+Goal:
+
+User should immediately understand:
+
+What GaamRide does.
+Which role they belong to.
+That the platform is built specifically for villages.
+That the app feels modern, trustworthy and unique.
+Do not copy Uber, Rapido or Ola UI directly.
+
+Create a unique “Village Mobility Platform” identity.
+
+One extra idea: add a very subtle animated route line connecting a 🏠 village house → 🛵 bike → 🚚 truck in the hero background. That single element will make the screen feel custom-made for GaamRide instead of looking like another transport app. 
+

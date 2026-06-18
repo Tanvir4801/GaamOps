@@ -12,3 +12,4 @@
 - [Admin revenue haul commission](revenue-commission.md) — use `h.appCommission ?? h.commission ?? 0`; never hardcode 75 as default — that inflates revenue numbers.
 - [Layout pattern for auth screens](flutter-layout-auth.md) — all auth screens (login, welcome) use Column not Stack+Positioned; SingleChildScrollView wraps Column for keyboard safety.
 - [GaamHaul architecture](gaamhaul-arch.md) — vehicle rental (NOT ride-hailing); haul_owner role; HaulOwnerShell parallel to SaathiMainShell; status flow searching→accepted→started→completed; startedAt set on startBooking; vehicleEmoji is class getter on HaulBookingModel (not extension)
+- [Premium UI theme rules](premium-ui-themes.md) — Vahan Saathi=brown (3E2723→5D4037→8D6E63), Saathi=green (1B5E20→2E7D32), Customer=orange; all profile screens use SliverAppBar expandedHeight≥250 with gradient; avoid compound Firestore queries that require indexes (filter client-side instead)

@@ -5,7 +5,6 @@ import '../../constants/app_colors.dart';
 import '../../models/saathi_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/saathi_service.dart';
-import '../../widgets/rating_widget.dart';
 import '../welcome_screen.dart';
 import 'saathi_history_screen.dart';
 import 'saathi_earnings_screen.dart';
@@ -22,17 +21,17 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
   SaathiModel? _saathi;
   bool _loading = true;
   bool _loadError = false;
-  late AnimationController _headerCtrl;
-  late Animation<double> _headerFade;
+  late AnimationController _fadeCtrl;
+  late Animation<double> _fadeAnim;
   StreamSubscription? _saathiSub;
 
   @override
   void initState() {
     super.initState();
-    _headerCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 600));
-    _headerFade = Tween<double>(begin: 0, end: 1).animate(
-        CurvedAnimation(parent: _headerCtrl, curve: Curves.easeOut));
+    _fadeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 650));
+    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
+        CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut));
     _load();
   }
 
@@ -51,7 +50,7 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
           _saathi = SaathiModel.fromFirestore(snap);
           _loading = false;
         });
-        if (wasNull) _headerCtrl.forward();
+        if (wasNull) _fadeCtrl.forward();
       } else {
         setState(() { _loading = false; _loadError = true; });
       }
@@ -75,10 +74,12 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
+            child: const Text('Sign Out',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -99,10 +100,26 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
     }
   }
 
+  String get _vehicleEmoji {
+    switch (_saathi?.vehicleType.toLowerCase()) {
+      case 'auto': return '🛺';
+      case 'cycle': return '🚲';
+      case 'ev': return '⚡';
+      default: return '🛵';
+    }
+  }
+
+  String _joinedDate() {
+    final ts = _saathi?.createdAt;
+    if (ts == null) return 'Recently';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${months[ts.month - 1]} ${ts.year}';
+  }
+
   @override
   void dispose() {
     _saathiSub?.cancel();
-    _headerCtrl.dispose();
+    _fadeCtrl.dispose();
     super.dispose();
   }
 
@@ -110,259 +127,389 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: AppColors.primaryGreen)),
+        backgroundColor: AppColors.bgGreen,
+        body: Center(
+            child: CircularProgressIndicator(color: AppColors.primaryGreen)),
       );
     }
     if (_loadError || _saathi == null) {
       return Scaffold(
+        backgroundColor: AppColors.bgGreen,
         appBar: AppBar(
           title: const Text('Profile'),
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textDark,
-          elevation: 0.5,
+          backgroundColor: AppColors.primaryGreen,
+          foregroundColor: Colors.white,
+          elevation: 0,
         ),
         body: Center(child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+            const Icon(Icons.person_off_outlined,
+                size: 56, color: AppColors.textLight),
             const SizedBox(height: 12),
             const Text('Profile not found',
                 style: TextStyle(color: AppColors.textGrey)),
             const SizedBox(height: 16),
-            ElevatedButton.icon(
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryGreen),
               onPressed: () {
                 setState(() { _loading = true; _loadError = false; });
                 _load();
               },
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryGreen,
-                foregroundColor: Colors.white,
-              ),
+              child: const Text('Retry',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         )),
       );
     }
 
+    final s = _saathi!;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      body: CustomScrollView(slivers: [
-        SliverAppBar(
-          expandedHeight: 200,
-          pinned: true,
-          backgroundColor: AppColors.primaryOrange,
-          elevation: 0,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.logout, color: Colors.white),
-              onPressed: _logout,
-            ),
-          ],
-          flexibleSpace: FlexibleSpaceBar(
-            background: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFBF360C), Color(0xFFE65100)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+      backgroundColor: AppColors.bgGreen,
+      body: FadeTransition(
+        opacity: _fadeAnim,
+        child: CustomScrollView(slivers: [
+          // ─── Green Header ──────────────────────────────────────────────────
+          SliverAppBar(
+            expandedHeight: 250,
+            pinned: true,
+            backgroundColor: AppColors.primaryGreen,
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white70),
+                tooltip: 'Sign Out',
+                onPressed: _logout,
               ),
-              child: SafeArea(
-                child: FadeTransition(
-                  opacity: _headerFade,
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF1B5E20),
+                      Color(0xFF2E7D32),
+                      Color(0xFF388E3C),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: SafeArea(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 16),
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundColor: Colors.white.withAlpha(50),
+                      const SizedBox(height: 20),
+                      // Avatar
+                      Stack(alignment: Alignment.bottomRight, children: [
+                        Container(
+                          width: 88, height: 88,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.8), width: 3),
+                            color: Colors.white.withOpacity(0.15),
+                          ),
+                          child: s.profilePhoto.isNotEmpty
+                              ? ClipOval(
+                                  child: Image.network(s.profilePhoto,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          _initials(s)),
+                                )
+                              : _initials(s),
+                        ),
+                        if (s.isVerified)
+                          Container(
+                            width: 26, height: 26,
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade600,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: const Icon(Icons.verified,
+                                color: Colors.white, size: 14),
+                          ),
+                      ]),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(s.name,
+                              style: const TextStyle(
+                                  fontSize: 22, fontWeight: FontWeight.bold,
+                                  color: Colors.white)),
+                          if (s.isVerified) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.verified,
+                                color: Colors.lightBlue, size: 18),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                         child: Text(
-                          _saathi!.name.isNotEmpty
-                              ? _saathi!.name[0].toUpperCase() : 'S',
+                          '$_vehicleEmoji  ${s.vehicleType}  ·  ${s.village}',
                           style: const TextStyle(
-                              fontSize: 30, fontWeight: FontWeight.bold,
-                              color: Colors.white),
+                              fontSize: 12, color: Colors.white),
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(_saathi!.name,
-                          style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold,
-                              color: Colors.white)),
-                      Text('+91 ${_saathi!.phone}',
-                          style: const TextStyle(
-                              fontSize: 13, color: Colors.white70)),
                       const SizedBox(height: 6),
-                      StarRating(rating: _saathi!.rating, size: 18),
-                      const SizedBox(height: 4),
-                      Text('${_saathi!.totalRides} rides completed',
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.white70)),
+                      Text(
+                        '${s.phone}  ·  Joined ${_joinedDate()}',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.6)),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
           ),
-        ),
 
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              // Stats row
-              Row(children: [
-                _statChip('🛵', '${_saathi!.totalRides}', 'Total Rides'),
-                const SizedBox(width: 10),
-                _statChip('⭐', _saathi!.rating.toStringAsFixed(1), 'Rating'),
-                const SizedBox(width: 10),
-                _statChip('📍', _saathi!.village, 'Village'),
-              ]),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
+              child: Column(children: [
+                // ─── Stats Row ──────────────────────────────────────────────
+                Row(children: [
+                  _statCard('${s.totalRides}', 'Total Rides',
+                      Icons.directions_bike_outlined, AppColors.primaryGreen),
+                  const SizedBox(width: 10),
+                  _statCard('${s.rating.toStringAsFixed(1)} ★', 'Rating',
+                      Icons.star_outline, AppColors.warning),
+                  const SizedBox(width: 10),
+                  _statCard(
+                      s.isOnline ? 'Online' : 'Offline',
+                      'Status',
+                      s.isOnline ? Icons.wifi_outlined : Icons.wifi_off_outlined,
+                      s.isOnline ? AppColors.success : AppColors.textGrey),
+                ]),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Vehicle info
-              _infoSection('Vehicle', [
-                _infoRow(Icons.electric_rickshaw, 'Type', _saathi!.vehicleType),
-                _infoRow(Icons.confirmation_number, 'Number', _saathi!.vehicleNumber),
-                _infoRow(Icons.location_city, 'Village', _saathi!.village),
-                _infoRow(
-                  _saathi!.isOnline ? Icons.wifi : Icons.wifi_off,
-                  'Status',
-                  _saathi!.isOnline ? 'Online' : 'Offline',
-                  valueColor: _saathi!.isOnline
-                      ? AppColors.primaryGreen : AppColors.textGrey,
+                // ─── Vehicle Info ────────────────────────────────────────────
+                _sectionCard(
+                  title: 'Vehicle',
+                  icon: Icons.electric_rickshaw_outlined,
+                  children: [
+                    _infoRow('$_vehicleEmoji', 'Type', s.vehicleType),
+                    _infoRow('🔢', 'Number',
+                        s.vehicleNumber.isNotEmpty ? s.vehicleNumber : '—'),
+                    if (s.vehicleColor.isNotEmpty)
+                      _infoRow('🎨', 'Color', s.vehicleColor),
+                    _infoRow('📍', 'Village', s.village),
+                    _infoRow('🛡', 'Verification',
+                        s.isVerified ? 'Verified ✓' : 'Pending'),
+                  ],
                 ),
-              ]),
 
-              const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
-              // Quick actions
-              _infoSection('Quick Actions', [
-                _actionRow(Icons.history, 'Ride History',
-                    AppColors.primaryOrange, () => Navigator.push(context,
-                        MaterialPageRoute(
-                            builder: (_) => const SaathiHistoryScreen()))),
-                _actionRow(Icons.account_balance_wallet_outlined, 'Earnings',
-                    AppColors.primaryGreen, () => Navigator.push(context,
-                        MaterialPageRoute(
-                            builder: (_) => const SaathiEarningsScreen()))),
-                _actionRow(Icons.help_outline, 'Help & Support',
-                    Colors.blue, () {}),
-              ]),
-
-              const SizedBox(height: 16),
-
-              // Logout
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.logout, color: Colors.red),
-                  label: const Text('Sign Out',
-                      style: TextStyle(
-                          color: Colors.red, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.red.shade200),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: _logout,
+                // ─── Performance ─────────────────────────────────────────────
+                _sectionCard(
+                  title: 'Performance',
+                  icon: Icons.bar_chart_outlined,
+                  children: [
+                    _infoRow('🛵', 'Total Rides', '${s.totalRides}'),
+                    _infoRow('⭐', 'Rating', '${s.rating.toStringAsFixed(1)} / 5.0'),
+                    _infoRow('📅', 'Member Since', _joinedDate()),
+                    _infoRow('📞', 'Phone', s.phone),
+                  ],
                 ),
-              ),
 
-              const SizedBox(height: 12),
-              const Text('GaamRide v1.0.0 · Mahuva Taluka',
-                  style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
-              const SizedBox(height: 24),
-            ]),
+                const SizedBox(height: 14),
+
+                // ─── Quick Actions ───────────────────────────────────────────
+                _sectionCard(
+                  title: 'More',
+                  icon: Icons.apps_outlined,
+                  children: [
+                    _actionRow(
+                        Icons.history_outlined,
+                        'Ride History',
+                        AppColors.primaryGreen,
+                        () => Navigator.push(context,
+                            MaterialPageRoute(
+                                builder: (_) => const SaathiHistoryScreen()))),
+                    _actionRow(
+                        Icons.account_balance_wallet_outlined,
+                        'Earnings',
+                        Colors.teal,
+                        () => Navigator.push(context,
+                            MaterialPageRoute(
+                                builder: (_) => const SaathiEarningsScreen()))),
+                    _actionRow(
+                        Icons.support_agent_outlined,
+                        'Help & Support',
+                        Colors.blue,
+                        () {}),
+                    _actionRow(
+                        Icons.share_outlined,
+                        'Share GaamRide',
+                        Colors.indigo,
+                        () {}),
+                    _actionRow(
+                        Icons.logout,
+                        'Sign Out',
+                        Colors.red,
+                        _logout),
+                  ],
+                ),
+
+                const SizedBox(height: 28),
+                Text('GaamRide v1.0 · Mahuva Taluka',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textGrey.withOpacity(0.7))),
+              ]),
+            ),
           ),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 
-  Widget _statChip(String emoji, String value, String label) {
-    return Expanded(child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 6)],
+  Widget _initials(SaathiModel s) {
+    return Center(
+      child: Text(
+        s.name.isNotEmpty ? s.name[0].toUpperCase() : 'S',
+        style: const TextStyle(
+            fontSize: 34, fontWeight: FontWeight.bold, color: Colors.white),
       ),
-      child: Column(children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
-        Text(value,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        Text(label,
-            style: const TextStyle(fontSize: 10, color: AppColors.textGrey),
-            textAlign: TextAlign.center),
-      ]),
-    ));
+    );
   }
 
-  Widget _infoSection(String title, List<Widget> items) {
+  Widget _statCard(String value, String label, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 10,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        child: Column(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: color.withAlpha(20),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 8),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.bold, color: color),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: AppColors.textGrey),
+              textAlign: TextAlign.center),
+        ]),
+      ),
+    );
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withAlpha(7), blurRadius: 12,
+              offset: const Offset(0, 2))
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text(title,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textGrey,
-                  fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          child: Row(children: [
+            Container(
+              width: 34, height: 34,
+              decoration: BoxDecoration(
+                color: AppColors.bgGreen,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(icon, color: AppColors.primaryGreen, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: AppColors.textDark)),
+          ]),
         ),
-        ...items,
+        Divider(height: 1, color: Colors.grey.shade100),
+        ...children,
       ]),
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value,
-      {Color? valueColor}) {
+  Widget _infoRow(String emoji, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       child: Row(children: [
-        Icon(icon, color: AppColors.primaryOrange, size: 18),
+        Text(emoji, style: const TextStyle(fontSize: 16)),
         const SizedBox(width: 12),
         Text(label,
             style: const TextStyle(color: AppColors.textGrey, fontSize: 13)),
         const Spacer(),
-        Text(value,
-            style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: valueColor ?? AppColors.textDark)),
+        Flexible(
+          child: Text(value,
+              style: const TextStyle(fontWeight: FontWeight.w600,
+                  fontSize: 13, color: AppColors.textDark),
+              textAlign: TextAlign.end),
+        ),
       ]),
     );
   }
 
-  Widget _actionRow(IconData icon, String label, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              color: color.withAlpha(25),
-              borderRadius: BorderRadius.circular(10),
+  Widget _actionRow(
+      IconData icon, String label, Color color, VoidCallback onTap) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: color.withAlpha(22),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 18),
             ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: Text(label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-          const Icon(Icons.chevron_right, color: AppColors.textGrey, size: 20),
-        ]),
+            const SizedBox(width: 14),
+            Expanded(child: Text(label,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w500))),
+            Icon(Icons.chevron_right,
+                color: Colors.grey.shade300, size: 20),
+          ]),
+        ),
       ),
     );
   }

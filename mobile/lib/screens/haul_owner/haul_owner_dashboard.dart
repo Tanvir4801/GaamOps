@@ -29,6 +29,13 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
+  String get _greeting {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good Morning';
+    if (h < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -173,18 +180,23 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
     final isAvailable = v?.isAvailable ?? false;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F3),
+      backgroundColor: AppColors.bgBrown,
       body: CustomScrollView(slivers: [
+        // ─── Premium Brown Header ───────────────────────────────────────────
         SliverAppBar(
-          expandedHeight: 130,
+          expandedHeight: 150,
           pinned: true,
-          backgroundColor: AppColors.primaryOrange,
+          backgroundColor: AppColors.primaryBrown,
           elevation: 0,
           flexibleSpace: FlexibleSpaceBar(
             background: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFFE65100), Color(0xFFF57C00)],
+                  colors: [
+                    Color(0xFF3E2723),
+                    Color(0xFF5D4037),
+                    Color(0xFF8D6E63),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -199,12 +211,21 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
+                            _greeting,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withOpacity(0.65),
+                                letterSpacing: 0.3),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
                             v?.ownerName ?? 'GaamHaul Owner',
                             style: const TextStyle(
-                                fontSize: 18,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white),
                           ),
+                          const SizedBox(height: 4),
                           Row(children: [
                             if (isAvailable)
                               FadeTransition(
@@ -212,7 +233,7 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
                                 child: Container(
                                   width: 8, height: 8,
                                   decoration: const BoxDecoration(
-                                      color: Color(0xFFFFE082),
+                                      color: Color(0xFFA5D6A7),
                                       shape: BoxShape.circle),
                                 ),
                               )
@@ -220,26 +241,39 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
                               Container(
                                 width: 8, height: 8,
                                 decoration: BoxDecoration(
-                                    color: Colors.white.withAlpha(100),
+                                    color: Colors.white.withAlpha(80),
                                     shape: BoxShape.circle),
                               ),
                             const SizedBox(width: 6),
                             Text(
                               isAvailable
                                   ? 'Available for Bookings'
-                                  : 'Unavailable',
+                                  : 'Offline — Toggle to go online',
                               style: TextStyle(
                                   fontSize: 12,
                                   color: isAvailable
-                                      ? const Color(0xFFFFE082)
-                                      : Colors.white60),
+                                      ? const Color(0xFFA5D6A7)
+                                      : Colors.white54),
                             ),
                           ]),
                         ],
                       ),
                     ),
-                    Text(v?.vehicleEmoji ?? '🚛',
-                        style: const TextStyle(fontSize: 40)),
+                    // Vehicle emoji large
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Center(
+                        child: Text(
+                          v?.vehicleTypeEmoji ?? '🚛',
+                          style: const TextStyle(fontSize: 34),
+                        ),
+                      ),
+                    ),
                   ]),
                 ),
               ),
@@ -251,134 +285,176 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(children: [
-              // Availability toggle
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withAlpha(10), blurRadius: 8)
-                  ],
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 48, height: 48,
-                    decoration: BoxDecoration(
-                      color: isAvailable
-                          ? AppColors.bgOrange : Colors.grey.shade100,
-                      shape: BoxShape.circle,
+              // ─── Availability Toggle ──────────────────────────────────────
+              GestureDetector(
+                onTap: _toggling ? null : _toggleAvailability,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isAvailable
+                          ? const [Color(0xFF5D4037), Color(0xFF8D6E63)]
+                          : const [Color(0xFF616161), Color(0xFF757575)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    child: Icon(
-                      isAvailable ? Icons.check_circle : Icons.do_not_disturb,
-                      color: isAvailable
-                          ? AppColors.primaryOrange : AppColors.textGrey,
-                      size: 26,
-                    ),
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (isAvailable
+                                ? AppColors.primaryBrown
+                                : Colors.grey)
+                            .withOpacity(0.35),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
+                  child: Row(children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: Container(
+                        key: ValueKey(isAvailable),
+                        width: 52, height: 52,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isAvailable
+                              ? Icons.local_shipping_rounded
+                              : Icons.do_not_disturb_on_outlined,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             isAvailable
-                                ? 'Available — Accepting Bookings'
-                                : 'Unavailable',
-                            style: TextStyle(
+                                ? '🟢 Available'
+                                : '⭕ Offline',
+                            style: const TextStyle(
+                                fontSize: 19,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: isAvailable
-                                    ? AppColors.primaryOrange
-                                    : AppColors.textGrey),
+                                color: Colors.white),
                           ),
+                          const SizedBox(height: 2),
                           Text(
                             isAvailable
                                 ? 'Customers can book your vehicle'
-                                : 'Toggle to accept new bookings',
+                                : 'Tap to start accepting bookings',
                             style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textGrey),
+                                fontSize: 12, color: Colors.white70),
                           ),
-                        ]),
-                  ),
-                  _toggling
-                      ? const SizedBox(
-                          width: 36, height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: AppColors.primaryOrange))
-                      : Switch.adaptive(
-                          value: isAvailable,
-                          onChanged: (_) => _toggleAvailability(),
-                          activeColor: AppColors.primaryOrange,
-                        ),
-                ]),
+                        ],
+                      ),
+                    ),
+                    _toggling
+                        ? const SizedBox(
+                            width: 36, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white))
+                        : Switch.adaptive(
+                            value: isAvailable,
+                            onChanged: (_) => _toggleAvailability(),
+                            activeColor: Colors.white,
+                            activeTrackColor:
+                                Colors.white.withOpacity(0.35),
+                            inactiveThumbColor: Colors.white,
+                            inactiveTrackColor:
+                                Colors.white.withOpacity(0.25),
+                          ),
+                  ]),
+                ),
               ),
 
               const SizedBox(height: 16),
 
-              // Stats row
+              // ─── Stats Row ────────────────────────────────────────────────
               Row(children: [
-                _statCard('આજની કમાણી',
+                _statCard(
                     '₹${_todayEarnings.toStringAsFixed(0)}',
-                    '$_todayJobs jobs today',
-                    AppColors.primaryOrange),
+                    'Today\'s Earnings',
+                    '$_todayJobs jobs',
+                    AppColors.primaryBrown,
+                    Icons.currency_rupee_rounded),
                 const SizedBox(width: 12),
-                _statCard('Total Jobs',
+                _statCard(
                     '${v?.totalBookings ?? 0}',
+                    'Total Jobs',
                     'All time',
-                    Colors.indigo),
+                    AppColors.mediumBrown,
+                    Icons.work_history_outlined),
               ]),
 
               const SizedBox(height: 16),
 
-              // Vehicle info
-              if (v != null) ...[
+              // ─── Vehicle Info Card ────────────────────────────────────────
+              if (v != null)
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withAlpha(8), blurRadius: 8)
+                          color: Colors.black.withAlpha(7),
+                          blurRadius: 12,
+                          offset: const Offset(0, 2))
                     ],
                   ),
                   child: Column(children: [
                     Row(children: [
                       Container(
-                        width: 52, height: 52,
+                        width: 56,
+                        height: 56,
                         decoration: BoxDecoration(
-                          color: AppColors.bgOrange,
-                          borderRadius: BorderRadius.circular(14),
+                          color: AppColors.bgBrown,
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         child: Center(
-                          child: Text(v.vehicleEmoji ?? '🚛',
+                          child: Text(v.vehicleTypeEmoji,
                               style: const TextStyle(fontSize: 28)),
                         ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(v.vehicleTypeLabel,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16)),
-                              Text(v.vehicleNumber,
-                                  style: const TextStyle(
-                                      color: AppColors.textGrey,
-                                      fontSize: 13)),
-                            ]),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${v.vehicleTypeEmoji}  ${v.vehicleTypeLabel}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: AppColors.textDark),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              v.vehicleNumber.isNotEmpty
+                                  ? v.vehicleNumber
+                                  : 'No plate set',
+                              style: const TextStyle(
+                                  color: AppColors.textGrey,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: AppColors.bgOrange,
+                          color: AppColors.bgBrown,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -386,7 +462,7 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
                           style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.primaryOrange),
+                              color: AppColors.primaryBrown),
                         ),
                       ),
                     ]),
@@ -402,60 +478,94 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
                       const Icon(Icons.scale_outlined,
                           size: 14, color: AppColors.textGrey),
                       const SizedBox(width: 4),
-                      Text(v.capacity,
+                      Text(
+                          v.capacity.isNotEmpty ? v.capacity : '—',
+                          style: const TextStyle(
+                              color: AppColors.textGrey, fontSize: 12)),
+                      const SizedBox(width: 16),
+                      const Icon(Icons.star_rounded,
+                          size: 14, color: AppColors.warning),
+                      const SizedBox(width: 4),
+                      Text(v.rating.toStringAsFixed(1),
                           style: const TextStyle(
                               color: AppColors.textGrey, fontSize: 12)),
                     ]),
                   ]),
                 ),
-              ],
 
-              // Unavailable prompt
-              if (!isAvailable) ...[
-                const SizedBox(height: 16),
+              // ─── Offline Prompt / Online Tip ──────────────────────────────
+              const SizedBox(height: 16),
+              if (!isAvailable)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(
-                    color: AppColors.bgOrange,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: AppColors.primaryOrange.withAlpha(80)),
-                  ),
-                  child: Column(children: [
-                    const Text('🚛',
-                        style: TextStyle(fontSize: 36)),
-                    const SizedBox(height: 10),
-                    const Text('ઉપલબ્ધ બનો · Go Available',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: AppColors.primaryOrange)),
-                    const SizedBox(height: 4),
-                    const Text('Toggle to start receiving haul bookings',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.textGrey)),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryOrange,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          elevation: 0,
-                        ),
-                        onPressed: _toggling ? null : _toggleAvailability,
-                        child: const Text('Go Available',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
-                      ),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4E342E), Color(0xFF6D4C41)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ]),
-                ),
-              ],
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                          color: AppColors.primaryBrown.withOpacity(0.30),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6)),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('🚛 Ready to Earn Today?',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '"તમારી ગાડી, તમારી કમાણી.\n'
+                        'GaamHaul સાથે આજે જ Online થાઓ!"',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white70,
+                            height: 1.5),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        _pill('💰 Avg ₹600/day'),
+                        const SizedBox(width: 8),
+                        _pill('⏰ Flexible'),
+                        const SizedBox(width: 8),
+                        _pill('🌟 Village work'),
+                      ]),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            elevation: 0,
+                          ),
+                          onPressed: _toggling
+                              ? null
+                              : _toggleAvailability,
+                          child: const Text(
+                            'Go Available Now',
+                            style: TextStyle(
+                                color: AppColors.primaryBrown,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                _HaulMotivationBanner(),
 
               const SizedBox(height: 24),
             ]),
@@ -465,9 +575,8 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
     );
   }
 
-  Widget _statCard(
-      String label, String value, String sub, Color color) {
-    // Parse numeric portion for animation (e.g. "₹1,200" → 1200, "5" → 5)
+  Widget _statCard(String value, String label, String sub, Color color,
+      IconData icon) {
     final numericStr = value.replaceAll(RegExp(r'[^0-9]'), '');
     final targetNum = double.tryParse(numericStr) ?? 0;
     final prefix = value.contains('₹') ? '₹' : '';
@@ -478,41 +587,139 @@ class _HaulOwnerDashboardState extends State<HaulOwnerDashboard>
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)
+            BoxShadow(
+                color: Colors.black.withAlpha(7),
+                blurRadius: 10,
+                offset: const Offset(0, 2))
           ],
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textGrey)),
-          const SizedBox(height: 4),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: targetNum),
-            duration: const Duration(milliseconds: 900),
-            curve: Curves.easeOut,
-            builder: (_, v, __) {
-              final display = targetNum >= 100
-                  ? v.toInt().toString()
-                  : v.toStringAsFixed(0);
-              return Text(
-                '$prefix$display$suffix',
-                style: TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold, color: color),
-              );
-            },
-          ),
-          Text(sub,
-              style: const TextStyle(
-                  fontSize: 10, color: AppColors.textGrey)),
-        ]),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: color.withAlpha(20),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const SizedBox(height: 10),
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textGrey)),
+              const SizedBox(height: 4),
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: targetNum),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeOut,
+                builder: (_, v, __) {
+                  final display = targetNum >= 100
+                      ? v.toInt().toString()
+                      : v.toStringAsFixed(0);
+                  return Text(
+                    '$prefix$display$suffix',
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: color),
+                  );
+                },
+              ),
+              Text(sub,
+                  style: const TextStyle(
+                      fontSize: 10, color: AppColors.textGrey)),
+            ]),
       ),
+    );
+  }
+
+  Widget _pill(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500)),
     );
   }
 }
 
-// ─── Booking Request Modal ─────────────────────────────────────────────────
+// ─── Motivation Banner ──────────────────────────────────────────────────────
+
+class _HaulMotivationBanner extends StatefulWidget {
+  const _HaulMotivationBanner();
+
+  @override
+  State<_HaulMotivationBanner> createState() =>
+      _HaulMotivationBannerState();
+}
+
+class _HaulMotivationBannerState extends State<_HaulMotivationBanner> {
+  static const _tips = [
+    'Online રહો, Booking વધારો ⚡',
+    'GaamHaul — Village Logistics Hero 🏆',
+    'દરરોજ નવી Job, નવી કમાણી 🌟',
+    'GaamHaul સાથે Earn More 💪',
+  ];
+  int _i = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _cycle();
+  }
+
+  void _cycle() async {
+    while (mounted) {
+      await Future.delayed(const Duration(seconds: 4));
+      if (!mounted) return;
+      setState(() => _i = (_i + 1) % _tips.length);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.bgBrown,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primaryBrown.withOpacity(0.25)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.local_fire_department_rounded,
+            color: AppColors.primaryBrown, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (child, anim) =>
+                FadeTransition(opacity: anim, child: child),
+            child: Text(
+              _tips[_i],
+              key: ValueKey(_i),
+              style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.primaryBrown,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── Booking Request Modal ──────────────────────────────────────────────────
 
 class _BookingRequestModal extends StatefulWidget {
   final HaulBookingModel booking;
@@ -526,7 +733,8 @@ class _BookingRequestModal extends StatefulWidget {
   });
 
   @override
-  State<_BookingRequestModal> createState() => _BookingRequestModalState();
+  State<_BookingRequestModal> createState() =>
+      _BookingRequestModalState();
 }
 
 class _BookingRequestModalState extends State<_BookingRequestModal> {
@@ -538,7 +746,10 @@ class _BookingRequestModalState extends State<_BookingRequestModal> {
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
       if (_seconds <= 1) {
         t.cancel();
         widget.onReject();
@@ -554,25 +765,43 @@ class _BookingRequestModalState extends State<_BookingRequestModal> {
     super.dispose();
   }
 
+  Widget _chip(IconData icon, String text,
+      {bool bold = false, Color? color}) {
+    return Row(children: [
+      Icon(icon, size: 15, color: color ?? AppColors.mediumBrown),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight:
+                    bold ? FontWeight.bold : FontWeight.normal,
+                color: color ?? AppColors.textDark)),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final b = widget.booking;
     final frac = _seconds / _total;
     final timerColor = frac > 0.5
-        ? AppColors.primaryOrange
+        ? AppColors.primaryBrown
         : frac > 0.25
-            ? Colors.deepOrange
+            ? const Color(0xFF8D6E63)
             : Colors.red;
 
     return PopScope(
       canPop: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+        child:
+            Column(mainAxisSize: MainAxisSize.min, children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
@@ -586,52 +815,60 @@ class _BookingRequestModalState extends State<_BookingRequestModal> {
           Text('$_seconds seconds to respond',
               style: const TextStyle(
                   fontSize: 12, color: AppColors.textGrey)),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           Text(b.vehicleEmoji,
-              style: const TextStyle(fontSize: 40)),
+              style: const TextStyle(fontSize: 42)),
           const SizedBox(height: 4),
-          const Text('🚛 નવી બુકિંગ વિનંતી!',
+          const Text('🚛 નવી Booking Request!',
               style: TextStyle(
                   fontSize: 18, fontWeight: FontWeight.bold)),
-          const Text('New Haul Booking Request',
-              style: TextStyle(color: AppColors.textGrey)),
+          const Text('New Haul Booking',
+              style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
           const SizedBox(height: 16),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.bgOrange,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.bgBrown,
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _chip(Icons.person, b.customerName),
+                  _chip(Icons.person_outline, b.customerName),
                   const SizedBox(height: 8),
-                  _chip(Icons.location_on_outlined, b.pickupVillage),
+                  _chip(Icons.location_on_outlined,
+                      b.pickupVillage),
                   const SizedBox(height: 8),
-                  _chip(Icons.inventory_2_outlined, b.loadDescription),
+                  _chip(Icons.inventory_2_outlined,
+                      b.loadDescription),
                   const SizedBox(height: 8),
                   _chip(Icons.timer_outlined, b.durationLabel),
                   const SizedBox(height: 8),
-                  _chip(Icons.currency_rupee,
-                      '₹${b.ownerEarnings.toStringAsFixed(0)} earnings',
-                      bold: true, color: AppColors.primaryOrange),
+                  _chip(
+                    Icons.currency_rupee,
+                    '₹${b.ownerEarnings.toStringAsFixed(0)} earnings',
+                    bold: true,
+                    color: AppColors.primaryBrown,
+                  ),
                 ]),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Row(children: [
             Expanded(
               child: OutlinedButton(
                 onPressed: widget.onReject,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  side: const BorderSide(color: Colors.red),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: BorderSide(color: Colors.grey.shade300),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Text('Reject'),
+                child: const Text('Decline',
+                    style: TextStyle(
+                        color: AppColors.textGrey,
+                        fontWeight: FontWeight.bold)),
               ),
             ),
             const SizedBox(width: 12),
@@ -640,51 +877,23 @@ class _BookingRequestModalState extends State<_BookingRequestModal> {
               child: ElevatedButton(
                 onPressed: widget.onAccept,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryOrange,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: AppColors.primaryBrown,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
                 child: const Text('✓ Accept Job',
                     style: TextStyle(
-                        fontSize: 15,
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white)),
+                        fontSize: 15)),
               ),
             ),
           ]),
-          SizedBox(height: MediaQuery.of(context).padding.bottom),
         ]),
       ),
     );
-  }
-
-  Widget _chip(IconData icon, String label,
-      {bool bold = false, Color? color}) {
-    return Row(children: [
-      Icon(icon, size: 15,
-          color: color ?? AppColors.primaryOrange),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight:
-                    bold ? FontWeight.bold : FontWeight.normal,
-                color: color ?? AppColors.textDark)),
-      ),
-    ]);
-  }
-}
-
-extension on HaulVehicleModel {
-  String? get vehicleEmoji {
-    switch (vehicleType.toLowerCase()) {
-      case 'tractor':    return '🚜';
-      case 'pickup':     return '🛻';
-      case 'truck_407':  return '🚚';
-      default:           return '🚛';
-    }
   }
 }
