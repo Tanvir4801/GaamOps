@@ -1,0 +1,367 @@
+Use this as a single master prompt for Replit/Lovable/Cursor/GitHub Copilot to upgrade your entire GaamRide onboarding and admin system.
+
+Project: GaamRide – Complete Registration, Verification & Admin Management System
+
+Overview:
+GaamRide is a village-focused transportation platform with three user roles:
+
+1. Customer
+2. Gaam Saathi (Bike / Auto Driver)
+3. Vahan Saathi (Mini Truck, Tempo, Pickup, Tractor Owner)
+
+Goal:
+Create a complete onboarding, verification, Firebase backend, and Admin Panel system.
+
+⸻
+
+ROLE SELECTION SCREEN
+
+Show 3 large cards:
+
+👤 Customer
+“રાઇડ અને પરિવહન બુક કરો”
+
+🚖 Gaam Saathi
+“બાઇક અથવા ઓટો ચલાવી કમાણી કરો”
+
+🚚 Vahan Saathi
+“મિની ટ્રક, ટેમ્પો, પિકઅપ અથવા ટ્રેક્ટર દ્વારા કમાણી કરો”
+
+Modern cards with icons and Gujarati-first UI.
+
+⸻
+
+GAAM SAATHI WELCOME SCREEN
+
+Title:
+“તમારી ગાડી, તમારી કમાણી”
+
+Subtitle:
+“ગામના લોકો સુધી પહોંચો અને દરરોજ કમાણી કરો”
+
+Benefits:
+✅ તમારા સમય પ્રમાણે કામ કરો
+✅ ગામ-ગામ રાઇડ મેળવો
+✅ સરળ ગુજરાતી એપ
+✅ સીધી ચુકવણી
+
+CTA:
+“કમાણી શરૂ કરો”
+
+⸻
+
+GAAM SAATHI REGISTRATION
+
+Step 1:
+Mobile Number + OTP
+
+Step 2:
+Personal Information
+
+Fields:
+
+* Full Name
+* Village / City
+* Profile Photo
+
+Step 3:
+Vehicle Information
+
+Vehicle Types:
+
+* Bike
+* Auto Rickshaw
+
+Fields:
+
+* Vehicle Number
+* Vehicle Brand
+* Vehicle Model
+
+Step 4:
+Documents
+
+Required:
+
+* Driving Licence (DL)
+
+Optional:
+
+* RC Book
+* Insurance
+* PUC
+
+Step 5:
+Submit Verification
+
+Status:
+Pending / Approved / Rejected
+
+⸻
+
+VAHAN SAATHI WELCOME SCREEN
+
+Title:
+“તમારું વાહન, તમારી આવક”
+
+Subtitle:
+“મિની ટ્રક, ટેમ્પો અને ટ્રેક્ટર માટે વધુ બુકિંગ મેળવો”
+
+Earnings Card:
+₹10,000 - ₹50,000+
+સ્થાનિક બુકિંગ દ્વારા
+
+Benefits:
+📦 માલ પરિવહન બુકિંગ
+🌾 ખેતી માટે વિશેષ સેવા
+💰 વધારાની આવક
+📱 સરળ ગુજરાતી એપ
+
+CTA:
+“વાહન જોડો”
+
+⸻
+
+VAHAN SAATHI REGISTRATION
+
+Step 1:
+Mobile Number + OTP
+
+Step 2:
+Personal Information
+
+Fields:
+
+* Full Name
+* Village / City
+* Profile Photo
+
+Step 3:
+Vehicle Type Selection
+
+Categories:
+
+🚚 Chhota Hathi / Tata Ace
+🚚 Tata Ace Gold CNG
+🚚 Mahindra Jeeto
+🚚 Ashok Leyland Dost
+🚚 Maruti Super Carry
+🛻 Bolero Pickup
+🛻 Tata Yodha Pickup
+🚛 Eicher Truck
+🚜 Tractor
+📦 Cargo Tempo
+⛽ CNG Cargo Vehicle
+🚚 Other Vehicle
+
+Fields:
+
+* Vehicle Number
+* Brand
+* Model
+* Capacity
+
+Step 4:
+Document Upload
+
+Required:
+
+* Driving Licence
+* RC Book
+* Vehicle Photo
+
+Optional:
+
+* Insurance
+* PUC Certificate
+
+Step 5:
+Bank & Payment Details
+
+* UPI ID
+    OR
+* Bank Account Number
+* IFSC
+
+Step 6:
+Submit Verification
+
+Status:
+Pending / Approved / Rejected
+
+⸻
+
+CUSTOMER REGISTRATION
+
+Only:
+
+* Mobile Number
+* OTP
+* Name
+
+No verification required.
+
+⸻
+
+FIREBASE BACKEND
+
+Use:
+
+* Firebase Authentication (Phone OTP)
+* Cloud Firestore
+* Firebase Storage
+
+Collections:
+
+customers
+gaam_saathi
+vahan_saathi
+bookings
+vehicles
+payments
+verification_requests
+
+⸻
+
+GAAM SAATHI DOCUMENT MODEL
+
+Store:
+
+uid
+name
+phone
+village
+profilePhoto
+vehicleType
+vehicleNumber
+vehicleBrand
+vehicleModel
+dlUrl
+rcUrl
+insuranceUrl
+pucUrl
+status
+createdAt
+
+⸻
+
+VAHAN SAATHI DOCUMENT MODEL
+
+Store:
+
+uid
+name
+phone
+village
+profilePhoto
+vehicleType
+vehicleNumber
+vehicleBrand
+vehicleModel
+capacity
+dlUrl
+rcUrl
+vehiclePhotoUrl
+insuranceUrl
+pucUrl
+upiId
+bankAccount
+ifsc
+status
+createdAt
+
+⸻
+
+ADMIN PANEL
+
+Dashboard Cards:
+
+Total Customers
+Total Gaam Saathi
+Total Vahan Saathi
+Pending Verifications
+Today’s Bookings
+
+⸻
+
+VERIFICATION MANAGEMENT
+
+Table Columns:
+
+Name
+Phone
+Role
+Village
+Vehicle Type
+DL
+RC
+Status
+
+Actions:
+
+View Documents
+Approve
+Reject
+
+When approved:
+status = approved
+
+When rejected:
+status = rejected
+
+⸻
+
+USER MANAGEMENT
+
+Search Users
+
+Filter:
+
+* Customer
+* Gaam Saathi
+* Vahan Saathi
+
+View:
+
+* Profile
+* Documents
+* Vehicle Details
+
+Suspend User
+Activate User
+
+⸻
+
+BOOKING MANAGEMENT
+
+Show:
+
+Booking ID
+Customer
+Driver
+Vehicle
+Pickup
+Drop
+Status
+
+⸻
+
+UI DESIGN RULES
+
+Gujarati First
+Modern Flutter UI
+Rounded Cards
+Large Icons
+Village Friendly Design
+Green Theme for Customer
+Dark Green Theme for Gaam Saathi
+Brown/Orange Theme for Vahan Saathi
+
+Use step-by-step registration wizard.
+Show progress indicators.
+Show upload preview for all documents.
+Show verification status badge everywhere.
+
+Create complete Flutter code structure, Firebase integration, Firestore models, repositories, services, state management, and responsive UI screens.
+
+This gives you an end-to-end blueprint for Customer, Gaam Saathi, Vahan Saathi, Firebase, document verification, and Admin Panel in one implementation. 🚚📱🌾

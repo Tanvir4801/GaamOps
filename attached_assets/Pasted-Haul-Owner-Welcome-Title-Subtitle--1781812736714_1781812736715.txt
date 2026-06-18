@@ -1,0 +1,141 @@
+Haul Owner Welcome
+Title:
+તમારું વાહન, તમારી આવક 🚚
+Subtitle: મિની ટ્રક, ટેમ્પો અને ટ્રેક્ટર માટે વધુ બુકિંગ મેળવો.
+Benefits
+📦 માલ પરિવહન માટે બુકિંગ
+🌾 ખેતી અને ગ્રામ્ય પરિવહન
+💰 વધારાની માસિક આવક
+📱 સરળ બુકિંગ મેનેજમેન્ટTrust Indicators:
+
+✓ આધાર વેરિફાઇડ ગ્રાહકો
+
+✓ સુરક્ષિત બુકિંગ
+
+✓ ઝડપી ચુકવણી
+
+Bottom CTA:
+
+Large rounded button
+
+Text: "વાહન જોડો"
+
+Show page indicators at bottom.
+
+Premium Flutter UI. Recommended Roles Naming
+❌ Haul Owner
+✅ વાહન સાથી (Vehicle Partner)
+or
+✅ પરિવહન સાથી (Transport Partner)
+These sound friendlier and more startup-like than “Haul Owner”.
+So final app roles:
+👤 ગ્રાહક (Customer)
+🚖 ગામ સાથી (Gaam Saathi)
+🚚 પરિવહન સાથી (Transport Saathi)
+This branding feels more local, memorable, and trusted for Gujarat villages. 🚀🌾🚚💰 also I want in haul owner login I think proper registration before login like production also in registration is proper liggaly compulsory Driving licence number need then RC book  Yes bro 💯. For Vahan Saathi (Mini Truck, Tempo, Tractor owners), you should collect basic legal documents during registration before allowing bookings.
+Keep it simple. Don’t ask 20 fields on one screen.
+Registration Flow
+Screen 1: Mobile Verification
+
+* Mobile Number
+* OTP Verification
+Screen 2: Personal Details
+
+* Full Name
+* Village / City
+* Profile Photo
+* Aadhaar Number (optional initially)
+Button: આગળ વધો
+Screen 3: Vehicle Details
+🚚 Vehicle Type
+
+* Mini Truck
+* Tempo
+* Pickup
+* Tractor
+* Chhota Hathi
+* Other
+Fields:
+
+* Vehicle Number (GJ-XX-XXXX)
+* Vehicle Brand
+* Model
+* Load Capacity (500kg, 1 Ton, 2 Ton)
+Screen 4: Upload Documents
+Required
+📄 Driving Licence (Front + Back)
+📄 RC Book
+📄 Vehicle Photo
+Recommended
+📄 Insurance Copy
+📄 PUC Certificate
+Show:🔒 તમારા દસ્તાવેજો સુરક્ષિત રાખવામાં આવશે Screen 5: Bank / UPI Details
+
+* UPI ID or
+* Account Number
+* IFSC
+This helps for future payouts.
+Screen 6: Review & Submit
+Show:
+👤 Name
+🚚 Vehicle
+📄 Documents Uploaded
+Then:
+🟢 Submit for VerificationVerification Status Screen
+After submission:⏳ તમારું એકાઉન્ટ ચકાસણી હેઠળ છે
+અંદાજિત સમય:
+24 - 48 કલાકStatus:
+🟡 Pending
+🟢 Approved
+🔴 Rejected
+Admin Panel
+You should manually approve drivers initially.
+Admin sees:Driver
+DL
+RC
+Vehicle
+Tanvir Patel
+View
+View
+Mini TruckButtons:
+✅ Approve
+❌ Reject
+Future (After Growth)
+Add:
+
+* Live selfie verification
+* RC OCR scanning
+* DL OCR scanning
+* Vehicle inspection photos
+But for V1:
+✅ Phone OTP
+✅ Name
+✅ Vehicle Details
+✅ DL Upload
+✅ RC Upload
+✅ Vehicle Photo
+✅ Manual Approval
+That’s enough to launch GaamRide safely and professionally without making registration too difficult. 🚚📱💰 so now I thnk first very imp is first impression and do customer geniun product so I want details promt for this and all firebase store flutter app and react admin panel properly add this end to end production level bt now in payment bank details is not mandatary optional in form also in form I think add some details tempo વાહન પ્રકાર પસંદ કરો
+
+
+🛺 Auto Rickshaw
+
+🚚 Chhota Hathi / Tata Ace
+
+🛻 Pickup
+
+🚛 Truck
+
+🚜 Tractor
+
+📦 Cargo Tempo
+
+⛽ CNG Cargo Vehicle after કંપની / મોડેલThen after selecting category:
+Tata Ace
+Mahindra Jeeto
+Ashok Leyland Dost
+Maruti Super Carry
+Bolero Pickup
+Tata Yodha
+Eicher
+Other so

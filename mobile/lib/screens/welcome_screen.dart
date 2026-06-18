@@ -3,6 +3,7 @@ import '../constants/app_colors.dart';
 import '../constants/app_strings.dart';
 import 'login_screen.dart';
 import 'auth/become_saathi_screen.dart';
+import 'auth/vahan_saathi_welcome_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -145,17 +146,17 @@ class WelcomeScreen extends StatelessWidget {
 
                   const SizedBox(height: 14),
 
-                  // Haul Owner button
+                  // Vahan Saathi (Haul Owner) button — goes to welcome screen
                   _WelcomeButton(
                     icon: Icons.local_shipping,
                     color: const Color(0xFF5D4037),
-                    titleGu: 'વાહન માલિક — GaamHaul',
-                    titleEn: 'Vehicle Owner — Rent your truck/tractor',
+                    titleGu: 'Vahan Saathi બનો 🚚',
+                    titleEn: 'Truck / Tractor — Freight partner',
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
                           builder: (_) =>
-                              const LoginScreen(role: 'haul_owner')),
+                              const VahanSaathiWelcomeScreen()),
                     ),
                   ),
 

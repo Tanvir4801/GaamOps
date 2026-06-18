@@ -2,7 +2,8 @@
 - [Firestore collection names](firestore-collections.md) — canonical names that must be used everywhere; bugs were fixed from wrong names
 - [Promo codes](promo-codes.md) — hardcoded in ride_request_screen: GAAM10=₹10, FIRSTRIDE=₹20, MAHUVA5=₹5; FavouriteRoutesScreen.saveRoute() is called from ride_request on confirm
 - [Flutter animation pattern](flutter-animations.md) — all premium animations use AnimationController in initState + dispose; radar uses CustomPainter with SweepGradient; shimmer uses LinearGradient with animated position
-- [Registration flow](registration-flow.md) — OTP screen routes new users to CustomerRegistrationScreen or SaathiRegistrationScreen (in screens/auth/); has _migrateTempSaathiIfExists() to upgrade admin-created phone-keyed docs to real uid
+- [Registration flow](registration-flow.md) — OTP routes new users to Customer/Saathi/VahanSaathiRegistrationScreen; haul_owner checks haul_vehicles.status → pending→PendingScreen, approved/active→HaulOwnerShell
+- [Vahan Saathi system](vahan-saathi-system.md) — full 5-step self-registration wizard; docs uploaded to vahan_saathi/{uid}/*; status:pending on submit; VahanSaathiPendingScreen watches live stream; Cloud Functions in functions/index.js send FCM on all status changes
 - [Admin CRUD conventions](admin-crud.md) — AddSaathi uses phone (no +91) as docId+uid; sets status:'pending', isVerified:false; batch writes saathis+users; VerificationsPage shows status='pending' OR isVerified=false
 - [Firestore migration](firestore-migration.md) — scripts/migrate_firestore.js ran once; fixed pipe-separated roles/statuses, SF geopoint, double-colon field names, missing fields
 - [GaamRide model APIs](gaamride-model-apis.md) — SaathiModel has no isVerified; use isBlocked. SettingsService.getSettings() returns AppSettingsModel (call .toMap() for FareCalculator). Future.wait with mixed return types needs sequential awaits to avoid cast issues.
