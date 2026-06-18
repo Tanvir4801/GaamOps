@@ -428,51 +428,65 @@ class _SaathiDashboardState extends State<SaathiDashboard>
                 ]),
               ),
 
-              // Offline prompt
+              // Offline motivational banner / Online tip
+              const SizedBox(height: 16),
               if (!_isOnline) ...[
-                const SizedBox(height: 16),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.bgGreen,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: AppColors.primaryGreen.withAlpha(80)),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryGreen.withOpacity(0.30),
+                        blurRadius: 16, offset: const Offset(0, 6)),
+                    ],
                   ),
-                  child: Column(children: [
-                    const Icon(Icons.power_settings_new,
-                        color: AppColors.primaryGreen, size: 40),
-                    const SizedBox(height: 10),
-                    const Text('ઓનલાઇન થઈ સવારી સ્વીકારો',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: AppColors.primaryGreen)),
-                    const SizedBox(height: 4),
-                    const Text('Go online to start accepting rides',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.textGrey)),
-                    const SizedBox(height: 14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('💪 Ready to Earn Today?',
+                        style: TextStyle(fontSize: 18,
+                            fontWeight: FontWeight.bold, color: Colors.white)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '"તમારી ગાડી, તમારી કમાણી.\n'
+                      'GaamRide સાથે આજે જ Online થાઓ!"',
+                      style: TextStyle(fontSize: 13,
+                          color: Colors.white80, height: 1.5)),
+                    const SizedBox(height: 16),
+                    Row(children: [
+                      _statPill('💰', 'Avg ₹400/day'),
+                      const SizedBox(width: 8),
+                      _statPill('⏱️', 'Flexible hours'),
+                      const SizedBox(width: 8),
+                      _statPill('🌟', 'Daily earnings'),
+                    ]),
+                    const SizedBox(height: 16),
                     SizedBox(
-                      width: double.infinity,
-                      height: 44,
+                      width: double.infinity, height: 44,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryGreen,
+                          backgroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                           elevation: 0,
                         ),
                         onPressed: _toggling ? null : _toggleOnline,
-                        child: const Text('Go Online',
+                        child: const Text('Go Online Now',
                             style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.primaryGreen,
                                 fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ]),
                 ),
+              ] else ...[
+                // Online — rotating motivational tip
+                _SaathiMotivationBanner(),
               ],
 
               const SizedBox(height: 24),
@@ -506,6 +520,81 @@ class _SaathiDashboardState extends State<SaathiDashboard>
               style: const TextStyle(fontSize: 10, color: AppColors.textGrey)),
         ]),
       ),
+    );
+  }
+}
+
+Widget _statPill(String emoji, String label) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text('$emoji $label',
+        style: const TextStyle(color: Colors.white,
+            fontSize: 11, fontWeight: FontWeight.w500)),
+  );
+}
+
+class _SaathiMotivationBanner extends StatefulWidget {
+  const _SaathiMotivationBanner();
+
+  @override
+  State<_SaathiMotivationBanner> createState() => _SaathiMotivationBannerState();
+}
+
+class _SaathiMotivationBannerState extends State<_SaathiMotivationBanner> {
+  static const _tips = [
+    'દરરોજ નવી રાઇડ, નવી કમાણી 🌟',
+    'Online રહો, Earning વધારો ⚡',
+    'ગામના Hero — GaamRide Saathi 🏆',
+    'GaamRide સાથે Earn More 💪',
+  ];
+  int _i = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _cycle();
+  }
+
+  void _cycle() async {
+    while (mounted) {
+      await Future.delayed(const Duration(seconds: 4));
+      if (!mounted) return;
+      setState(() => _i = (_i + 1) % _tips.length);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.bgGreen,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primaryGreen.withOpacity(0.25)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.local_fire_department_rounded,
+            color: AppColors.primaryGreen, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (child, anim) =>
+                FadeTransition(opacity: anim, child: child),
+            child: Text(
+              _tips[_i],
+              key: ValueKey(_i),
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.primaryGreen,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ]),
     );
   }
 }

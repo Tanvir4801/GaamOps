@@ -178,21 +178,41 @@ class RideService {
   }
 
   static Future<List<QueryDocumentSnapshot>> getCustomerHistory(String customerId) async {
+    // No orderBy — avoids composite index requirement; sort client-side
     final snap = await _rides
         .where('customerId', isEqualTo: customerId)
-        .orderBy('createdAt', descending: true)
-        .limit(30)
+        .limit(50)
         .get();
-    return snap.docs;
+    final sorted = [...snap.docs]..sort((a, b) {
+        final aData = a.data() as Map<String, dynamic>;
+        final bData = b.data() as Map<String, dynamic>;
+        final aTs = aData['createdAt'] as Timestamp?;
+        final bTs = bData['createdAt'] as Timestamp?;
+        if (aTs == null && bTs == null) return 0;
+        if (aTs == null) return 1;
+        if (bTs == null) return -1;
+        return bTs.compareTo(aTs);
+      });
+    return sorted;
   }
 
   static Future<List<QueryDocumentSnapshot>> getSaathiHistory(String saathiId) async {
+    // No orderBy — avoids composite index requirement; sort client-side
     final snap = await _rides
         .where('saathiId', isEqualTo: saathiId)
-        .orderBy('createdAt', descending: true)
-        .limit(30)
+        .limit(50)
         .get();
-    return snap.docs;
+    final sorted = [...snap.docs]..sort((a, b) {
+        final aData = a.data() as Map<String, dynamic>;
+        final bData = b.data() as Map<String, dynamic>;
+        final aTs = aData['createdAt'] as Timestamp?;
+        final bTs = bData['createdAt'] as Timestamp?;
+        if (aTs == null && bTs == null) return 0;
+        if (aTs == null) return 1;
+        if (bTs == null) return -1;
+        return bTs.compareTo(aTs);
+      });
+    return sorted;
   }
 
   static Future<Map<String, dynamic>> getSaathiEarnings(String saathiId) async {

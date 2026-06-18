@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_strings.dart';
 import 'login_screen.dart';
+import 'auth/become_saathi_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -129,7 +130,7 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
 
-                  // Saathi button
+                  // Saathi button — goes to BecomeSaathiScreen first
                   _WelcomeButton(
                     icon: Icons.two_wheeler,
                     color: AppColors.primaryOrange,
@@ -138,7 +139,7 @@ class WelcomeScreen extends StatelessWidget {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const LoginScreen(role: 'saathi')),
+                          builder: (_) => const BecomeSaathiScreen()),
                     ),
                   ),
 
@@ -156,6 +157,51 @@ class WelcomeScreen extends StatelessWidget {
                           builder: (_) =>
                               const LoginScreen(role: 'haul_owner')),
                     ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Trust badges row
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    _TrustBadge(Icons.verified_user_outlined, 'Safe & Secure'),
+                    Container(height: 30, width: 1,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        color: Colors.grey.shade200),
+                    _TrustBadge(Icons.support_agent_outlined, 'Local Support'),
+                    Container(height: 30, width: 1,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        color: Colors.grey.shade200),
+                    _TrustBadge(Icons.currency_rupee_outlined, 'Fair Pricing'),
+                  ]),
+
+                  const SizedBox(height: 14),
+
+                  // Social proof
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FBF0),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFB8E0B8)),
+                    ),
+                    child: Row(children: [
+                      const Text('⭐⭐⭐⭐⭐', style: TextStyle(fontSize: 14)),
+                      const SizedBox(width: 10),
+                      const Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '"GaamRide આવ્યા પછી ગામડામાં ટ્રાન્સપોર્ટ સરળ!'
+                            '"',
+                            style: TextStyle(fontSize: 11,
+                                color: Color(0xFF1B5E20),
+                                fontStyle: FontStyle.italic),
+                          ),
+                          Text('— Mahuva Taluka User',
+                              style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        ],
+                      )),
+                    ]),
                   ),
 
                   const Spacer(),
@@ -180,6 +226,23 @@ class WelcomeScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _TrustBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _TrustBadge(this.icon, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 20, color: AppColors.primaryGreen),
+      const SizedBox(height: 4),
+      Text(label, style: TextStyle(
+          fontSize: 10, color: Colors.grey.shade600,
+          fontWeight: FontWeight.w500)),
+    ]);
   }
 }
 

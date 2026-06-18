@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../constants/app_colors.dart';
@@ -23,6 +24,7 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
   bool _loadError = false;
   late AnimationController _headerCtrl;
   late Animation<double> _headerFade;
+  StreamSubscription? _saathiSub;
 
   @override
   void initState() {
@@ -34,24 +36,28 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
     _load();
   }
 
-  Future<void> _load() async {
+  void _load() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       if (mounted) setState(() { _loading = false; _loadError = true; });
       return;
     }
-    try {
-      final snap = await SaathiService.getSaathi(uid);
-      if (mounted) {
+    _saathiSub?.cancel();
+    _saathiSub = SaathiService.watchSaathi(uid).listen((snap) {
+      if (!mounted) return;
+      if (snap.exists) {
+        final wasNull = _saathi == null;
         setState(() {
-          _saathi = snap.exists ? SaathiModel.fromFirestore(snap) : null;
+          _saathi = SaathiModel.fromFirestore(snap);
           _loading = false;
         });
-        if (_saathi != null) _headerCtrl.forward();
+        if (wasNull) _headerCtrl.forward();
+      } else {
+        setState(() { _loading = false; _loadError = true; });
       }
-    } catch (e) {
+    }, onError: (_) {
       if (mounted) setState(() { _loading = false; _loadError = true; });
-    }
+    });
   }
 
   Future<void> _logout() async {
@@ -95,6 +101,7 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
 
   @override
   void dispose() {
+    _saathiSub?.cancel();
     _headerCtrl.dispose();
     super.dispose();
   }

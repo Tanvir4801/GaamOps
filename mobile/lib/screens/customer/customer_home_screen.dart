@@ -13,6 +13,55 @@ import '../../widgets/village_selector_sheet.dart';
 import 'ride_request_screen.dart';
 import 'favourite_routes_screen.dart';
 
+class _MarqueeText extends StatefulWidget {
+  const _MarqueeText();
+
+  @override
+  State<_MarqueeText> createState() => _MarqueeTextState();
+}
+
+class _MarqueeTextState extends State<_MarqueeText> {
+  static const _texts = [
+    '⚡ ઝટપટ બુકિંગ, તરત સેવા',
+    '🛡️ Verified Saathis only',
+    '💰 ₹25 થી શરૂ — Affordable rides',
+    '📍 Mahuva Taluka exclusively',
+    '⭐ Trusted by village families',
+  ];
+  int _current = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _cycle();
+  }
+
+  void _cycle() async {
+    while (mounted) {
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
+      setState(() => _current = (_current + 1) % _texts.length);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      transitionBuilder: (child, anim) =>
+          FadeTransition(opacity: anim, child: child),
+      child: Text(
+        _texts[_current],
+        key: ValueKey(_current),
+        style: const TextStyle(
+            fontSize: 12, color: Color(0xFF1B5E20),
+            fontWeight: FontWeight.w500),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
 
@@ -166,6 +215,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
                   ),
                 ),
               ),
+            ),
+          ),
+
+          // Marquee trust banner
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: const Color(0xFFE8F5E9),
+              child: Row(children: [
+                const Icon(Icons.verified_rounded, color: Color(0xFF2E7D32), size: 16),
+                const SizedBox(width: 8),
+                const Expanded(child: _MarqueeText()),
+              ]),
             ),
           ),
 
