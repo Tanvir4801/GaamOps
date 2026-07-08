@@ -447,7 +447,7 @@ export default function AllSaathiPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Name & Phone', 'Village', 'Vehicle', 'Online', 'Rating', 'Rides', 'Verified', 'Status', 'Last Seen', 'Actions'].map(h => (
+                  {['Name & Phone', 'Village', 'Vehicle', 'Online', 'Rating', 'Rides', 'Earnings', 'Verified', 'Status', 'Last Seen', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
                   ))}
                 </tr>
@@ -475,6 +475,7 @@ export default function AllSaathiPage() {
                     <td className="px-4 py-3"><Dot on={s.isOnline} /></td>
                     <td className="px-4 py-3">⭐ {s.rating?.toFixed(1) || '5.0'}</td>
                     <td className="px-4 py-3 font-medium">{s.totalRides || 0}</td>
+                    <td className="px-4 py-3 font-medium text-green-700">₹{(s.totalEarnings || 0).toLocaleString('en-IN')}</td>
                     <td className="px-4 py-3">
                       {s.isVerified ? (
                         <span className="text-xs text-green-600">✅ Yes</span>

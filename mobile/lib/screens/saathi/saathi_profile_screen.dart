@@ -8,6 +8,7 @@ import '../../services/saathi_service.dart';
 import '../welcome_screen.dart';
 import 'saathi_history_screen.dart';
 import 'saathi_earnings_screen.dart';
+import 'upi_setup_screen.dart';
 
 class SaathiProfileScreen extends StatefulWidget {
   const SaathiProfileScreen({super.key});
@@ -349,6 +350,20 @@ class _SaathiProfileScreenState extends State<SaathiProfileScreen>
                         () => Navigator.push(context,
                             MaterialPageRoute(
                                 builder: (_) => const SaathiEarningsScreen()))),
+                    _actionRow(
+                        Icons.qr_code_2_rounded,
+                        'Payment Settings',
+                        const Color(0xFF1D4ED8),
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UpiSetupScreen(
+                              currentUpiId: _saathi?.upiId ?? '',
+                              currentUpiName: _saathi?.upiName ?? '',
+                              saathiName: _saathi?.name ?? '',
+                            ),
+                          ),
+                        )),
                     _actionRow(
                         Icons.support_agent_outlined,
                         'Help & Support',

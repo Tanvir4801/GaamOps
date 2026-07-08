@@ -11,7 +11,7 @@ import '../../services/village_service.dart';
 import '../../services/fare_service.dart';
 import 'ride_tracking_screen.dart';
 import 'favourite_routes_screen.dart';
-import 'payment_sheet.dart';
+import 'payment_choice_screen.dart';
 
 class RideRequestScreen extends StatefulWidget {
   final VillageModel pickupVillage;
@@ -106,20 +106,17 @@ class _RideRequestScreenState extends State<RideRequestScreen>
     if (_breakdown == null) return;
     _btnCtrl.reverse().then((_) => _btnCtrl.forward());
 
-    final method = await showModalBottomSheet<PaymentMethod>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => PaymentSheet(
-        breakdown: _breakdown!,
-        onConfirm: (m) => _submitRide(m),
-      ),
+    final method = await PaymentChoiceSheet.show(
+      context,
+      _breakdown!,
+      (_) {}, // return value used below
     );
 
     if (method != null) await _submitRide(method);
   }
 
-  Future<void> _submitRide(PaymentMethod method) async {
+  /// [method] is RideModel.paymentCash or RideModel.paymentUpiDirect
+  Future<void> _submitRide(String method) async {
     if (_loading) return;
     setState(() => _loading = true);
 
@@ -148,8 +145,7 @@ class _RideRequestScreenState extends State<RideRequestScreen>
       fare: b.totalFare,
       distance: dist / 1000,
       targetSaathiId: widget.saathi?.uid ?? '',
-      paymentMethod:
-          method == PaymentMethod.upi ? RideModel.paymentUpi : RideModel.paymentCash,
+      paymentMethod: method,
       baseFare: b.baseFare,
       distanceCharge: b.distanceCharge,
       surgeMultiplier: b.surgeMultiplier,

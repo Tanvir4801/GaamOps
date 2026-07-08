@@ -1,0 +1,361 @@
+Update GaamRide Flutter app payment system to match the real business model:
+SAATHI COLLECTS PAYMENT FROM CUSTOMER DIRECTLY.
+The app does NOT process money. No Razorpay, no gateway, no SDK.
+
+═══ REAL PAYMENT MODEL ═══
+
+CASH FLOW:
+  Customer hands cash to saathi after ride → Saathi taps "Cash received" in app
+  → Firestore updated → Both see ride complete
+
+ONLINE UPI FLOW (Saathi's personal UPI):
+  Customer wants to pay online → Saathi shows their personal UPI QR code in app
+  → Customer scans with any UPI app (GPay/PhonePe/Paytm) on their phone
+  → Customer pays saathi directly (peer-to-peer, no app commission)
+  → Saathi sees payment in their bank → Taps "Payment received" in app
+  → Firestore updated → Both see ride complete
+
+THE APP'S ONLY JOB:
+  - Let customer choose payment method at booking time (cash or online)
+  - Show saathi's UPI QR when customer chooses online
+  - Let saathi CONFIRM they received payment (both methods)
+  - Save payment status to Firestore for admin visibility
+
+WHAT NOT TO BUILD:
+  - NO Razorpay SDK or any payment gateway
+  - NO card payments (not relevant for rural Gujarat)
+  - NO app-to-saathi transfer
+  - NO deduction of commission from fare (commission model is future scope)
+
+═══ FIRESTORE SCHEMA UPDATE ═══
+
+rides/{rideId} — add these fields:
+  paymentMethod: string    // 'cash' | 'upi_direct'
+  paymentStatus: string    // 'pending' | 'collected'
+  paymentConfirmedBySaathi: boolean   // true when saathi taps confirm
+  paymentConfirmedAt: timestamp
+
+saathis/{uid} — add these fields:
+  upiId: string            // saathi's personal UPI ID e.g. "9876543210@ybl"
+  upiName: string          // name on UPI account
+  upiQrImageUrl: string    // optional: uploaded QR image URL
+
+haul_bookings/{bookingId} — same payment fields as rides
+
+═══ FILES TO CREATE/MODIFY ═══
+
+CREATE: lib/screens/customer/payment_choice_screen.dart
+CREATE: lib/screens/saathi/payment_confirm_screen.dart
+CREATE: lib/screens/saathi/upi_qr_screen.dart
+CREATE: lib/screens/saathi/upi_setup_screen.dart
+MODIFY: lib/screens/customer/ride_booking_screen.dart
+MODIFY: lib/screens/saathi/active_ride_screen.dart
+MODIFY: lib/services/ride_service.dart
+
+═══ CUSTOMER SIDE ═══
+
+── lib/screens/customer/payment_choice_screen.dart ──
+Shown BEFORE customer confirms booking (on ride booking screen, after
+selecting pickup/destination and seeing fare estimate).
+
+UI — bottom sheet or full screen:
+  Header: "How will you pay?" (18sp bold)
+  Subtext: "Let your saathi know so they're prepared" (13sp gray)
+
+  Two options as large tappable cards (not radio buttons — big cards):
+
+  Card 1 — Cash:
+    Icon: large 💵 or Icons.payments (48px, green bg circle)
+    Title: "Cash" (16sp bold)
+    Subtitle: "Pay ₹{fare} directly to saathi after ride" (13sp gray)
+    Badge: "Most common" (green pill)
+    onTap: set _paymentMethod = 'cash'
+
+  Card 2 — Online (UPI):
+    Icon: large Icons.qr_code_2 (48px, blue bg circle)
+    Title: "Online / UPI" (16sp bold)
+    Subtitle: "Scan saathi's QR with GPay, PhonePe, or Paytm" (13sp gray)
+    Badge: "No cash needed" (blue pill)
+    onTap: set _paymentMethod = 'upi_direct'
+
+  Selected card: orange border (2px, Color(0xFFf97316)), light orange bg tint
+  Unselected: normal gray border 0.5px
+
+  Bottom: "Confirm booking" button (full width, orange, 52px)
+    Disabled until a method is selected
+    onPressed: create ride with paymentMethod field set
+
+SAVE TO RIDE:
+  When createRide() is called, include:
+  'paymentMethod': _paymentMethod,   // 'cash' or 'upi_direct'
+  'paymentStatus': 'pending',
+  'paymentConfirmedBySaathi': false,
+
+── AFTER RIDE COMPLETES (customer side) ──
+When rides/{rideId}.paymentConfirmedBySaathi becomes true,
+show the customer a RIDE SUMMARY SCREEN:
+
+lib/screens/customer/ride_summary_screen.dart
+
+UI:
+  Large green checkmark animation (Icons.check_circle, 72px, green)
+  Title: "Ride complete!" (22sp bold)
+  
+  Summary card (white, rounded 16px):
+    Route: "{pickupVillage} → {destinationVillage}"
+    Distance: "{distanceKm} km"
+    Fare: "₹{fare}" (bold orange)
+    Paid via: "Cash" or "UPI" with icon
+    Saathi: "{saathiName}" with ⭐{rating}
+    Time: "{duration} mins"
+  
+  Two buttons:
+    "Rate your saathi" (primary, orange) → RateRideScreen
+    "Back to home" (secondary, outlined)
+
+This screen replaces the live tracking screen when payment is confirmed.
+
+═══ SAATHI SIDE ═══
+
+── Active ride screen — "Complete Ride" button ──
+When saathi taps "Complete Ride" on the fullscreen map:
+
+1. updateDoc rides/{rideId} {
+     status: 'completed',
+     completedAt: FieldValue.serverTimestamp(),
+   }
+   (do NOT set paymentConfirmedBySaathi yet)
+
+2. Navigate to PaymentConfirmScreen
+
+── lib/screens/saathi/payment_confirm_screen.dart ──
+
+Read rides/{rideId} to get paymentMethod customer chose.
+
+IF paymentMethod == 'cash':
+
+  Show CASH COLLECTION screen:
+    Top half:
+      Money icon (Icons.payments, 64px, green circle bg)
+      Title: "Collect payment" (20sp bold)
+      Fare amount: "₹{fare}" (36sp bold, orange)
+      Subtitle: "{customerName} will pay you cash" (14sp gray)
+
+    Instruction card (light green bg):
+      "Ask {customerName} for ₹{fare} in cash before they leave"
+
+    Big green button: "Cash received ✓" (full width, 56px, green #16a34a)
+      onPressed: _confirmPayment()
+
+    Small text below: "Don't tap until you have the cash in hand"
+
+IF paymentMethod == 'upi_direct':
+
+  Show UPI COLLECTION screen:
+    Title: "Show your QR code" (20sp bold)
+    Subtitle: "Ask {customerName} to scan and pay ₹{fare}" (14sp gray)
+
+    Center: large QR code display (see section 4)
+
+    Fare badge floating below QR:
+      "₹{fare}" in bold orange — customer knows exact amount to enter
+
+    Note: "Customer will pay directly to your UPI account"
+
+    Button: "Payment received ✓" (full width, 56px, blue)
+      onPressed: _confirmPayment()
+
+    Secondary button: "Customer wants to pay cash instead"
+      onPressed: → switch to cash collection screen
+
+── _confirmPayment() ──
+async method called by both buttons:
+
+  setState(() => _isConfirming = true);
+
+  await FirebaseFirestore.instance
+    .collection('rides')
+    .doc(widget.rideId)
+    .update({
+      'paymentStatus': 'collected',
+      'paymentConfirmedBySaathi': true,
+      'paymentConfirmedAt': FieldValue.serverTimestamp(),
+    });
+
+  // Increment saathi earnings tracker (optional but useful)
+  await FirebaseFirestore.instance
+    .collection('saathis')
+    .doc(currentUser.uid)
+    .update({
+      'totalRides': FieldValue.increment(1),
+      'totalEarnings': FieldValue.increment(widget.fare),
+    });
+
+  // Navigate to saathi's ride complete screen
+  Navigator.pushReplacement(context, MaterialPageRoute(
+    builder: (_) => SaathiRideCompleteScreen(
+      fare: widget.fare,
+      customerName: widget.customerName,
+      paymentMethod: widget.paymentMethod,
+    ),
+  ));
+
+── lib/screens/saathi/ride_complete_screen.dart ──
+  Large green check animation
+  "Ride complete!" (22sp bold)
+  "You earned ₹{fare}" (20sp, orange, bold)
+  "Paid via: Cash / UPI" with icon
+  Summary: customer name, route, distance
+  Button: "Go online for next ride" → pop back to saathi home
+
+═══ QR CODE SCREEN ═══
+
+PACKAGE needed:
+  qr_flutter: ^4.1.0   ← generates QR from UPI ID string
+
+Add to pubspec.yaml and run flutter pub get.
+
+── lib/screens/saathi/upi_qr_screen.dart ──
+
+Widget that shows saathi's UPI QR for customer to scan.
+
+HOW UPI QR WORKS:
+  A standard UPI deep link encodes the saathi's UPI ID, name, and amount.
+  Any UPI app (GPay, PhonePe, Paytm) can scan it and auto-fill the payment.
+  Format: upi://pay?pa={upiId}&pn={upiName}&am={amount}&cu=INR&tn=GaamRide
+
+BUILD THE QR:
+  String upiId = saathiData['upiId'] ?? '';
+  String upiName = saathiData['upiName'] ?? saathiData['name'] ?? 'Saathi';
+  String amount = fare.toStringAsFixed(2);
+
+  String upiString =
+    'upi://pay?pa=$upiId&pn=${Uri.encodeComponent(upiName)}'
+    '&am=$amount&cu=INR&tn=GaamRide+Ride+Payment';
+
+DISPLAY WITH qr_flutter:
+  QrImageView(
+    data: upiString,
+    version: QrVersions.auto,
+    size: 240.0,
+    backgroundColor: Colors.white,
+    padding: EdgeInsets.all(16),
+  )
+
+FULL WIDGET UI:
+  White card (rounded 20px, shadow sm), centered:
+    UPI logo or "Scan to pay" label (12sp gray, above QR)
+    QrImageView (240×240)
+    Dotted border container around QR (dashed orange border, rounded 12px)
+    Below QR: saathi name + UPI ID in small gray text
+    Fare badge: "₹{fare}" — large, bold orange, centered below QR
+    Small icons row: GPay logo + PhonePe logo + Paytm logo
+      (simple colored SVG initials, no copyrighted assets)
+      Label: "Open any of these apps to scan" (11sp gray)
+
+  If saathi has no UPI ID set up:
+    Show banner: "Set up your UPI ID to accept online payments"
+    Button: "Set up UPI" → UpiSetupScreen
+    Show cash option as fallback
+
+── lib/screens/saathi/upi_setup_screen.dart ──
+One-time setup for saathi to add their UPI ID.
+
+Fields:
+  UPI ID text field
+    placeholder: "yourname@ybl or 9876543210@paytm"
+    helper: "Find this in your GPay/PhonePe/Paytm settings"
+  Name on UPI account (pre-filled from saathi name)
+  "Verify UPI" button → just saves to Firestore (no API verification needed)
+
+On save:
+  updateDoc saathis/{uid} {
+    upiId: enteredUpiId.trim(),
+    upiName: upiName.trim(),
+  }
+  Show toast: "UPI ID saved. Customers can now scan to pay you."
+  Pop back.
+
+ADD UPI SETUP to Saathi profile/settings screen as:
+  "Payment settings" → UpiSetupScreen
+  Show current UPI ID if already set, with "Edit" option.
+
+COMMON UPI ID FORMATS (show as hint chips in setup screen):
+  PhonePe:  9876543210@ybl
+  GPay:     9876543210@okicici or name@oksbi
+  Paytm:    9876543210@paytm
+  BHIM:     9876543210@upi
+
+═══ FIRESTORE + ADMIN PANEL ═══
+
+── Add totalEarnings field to saathis ──
+When _confirmPayment() runs, add:
+  'totalEarnings': FieldValue.increment(fare)
+
+This lets the admin panel show how much each saathi has earned total.
+This is tracked by the APP — actual money goes directly to saathi's UPI.
+
+── Full rides/{rideId} payment fields summary ──
+  paymentMethod: 'cash' | 'upi_direct'
+  paymentStatus: 'pending' | 'collected'
+  paymentConfirmedBySaathi: false | true
+  paymentConfirmedAt: timestamp | null
+
+── Update React admin panel (Rides.jsx) ──
+
+In the rides table, add Payment column:
+  Show: paymentMethod badge + paymentStatus badge
+
+  paymentMethod badges:
+    'cash'       → gray pill "Cash"
+    'upi_direct' → blue pill "UPI"
+    ''           → yellow pill "Unknown"
+
+  paymentStatus badges:
+    'pending'   → yellow "Pending"
+    'collected' → green "Collected"
+
+In the Saathis.jsx table, add:
+  Total Earnings column: ₹{totalEarnings ?? 0}
+  (sum of all fares confirmed by this saathi)
+
+── EDGE CASES TO HANDLE ──
+
+1. SAATHI COMPLETES RIDE, CUSTOMER DISPUTES:
+   Admin can manually set paymentStatus = 'collected' or 'disputed'
+   Add 'disputed' as a valid paymentStatus in admin panel
+
+2. RIDE CANCELLED — no payment needed:
+   If status = 'cancelled', skip PaymentConfirmScreen entirely
+   paymentStatus stays 'pending' (irrelevant for cancelled rides)
+
+3. APP CLOSED MID-PAYMENT:
+   On saathi app open, check for any rides where:
+   status == 'completed' AND paymentConfirmedBySaathi == false
+   If found, show a banner: "You have an unconfirmed payment — tap to confirm"
+   This prevents payment being forgotten if app closes
+
+   In saathi home screen initState:
+   final unpaidRides = await FirebaseFirestore.instance
+     .collection('rides')
+     .where('saathiId', isEqualTo: currentUser.uid)
+     .where('status', isEqualTo: 'completed')
+     .where('paymentConfirmedBySaathi', isEqualTo: false)
+     .limit(1)
+     .get();
+
+   if (unpaidRides.docs.isNotEmpty) {
+     final ride = unpaidRides.docs.first;
+     showPendingPaymentBanner(ride.id, ride.data());
+   }
+
+4. HAUL BOOKINGS — same logic:
+   Apply identical payment flow to haul_bookings collection.
+   Vehicle owner confirms payment instead of saathi.
+   PaymentConfirmScreen works for both — pass collectionType: 'ride' | 'haul'
+
+── NO RAZORPAY NEEDED — REMOVE IF ALREADY ADDED ──
+If razorpay_flutter was already added to pubspec.yaml, remove it.
+This app does not process payments through any gateway.
+Delete payment_service.dart if it was created in a previous prompt.
+The UPI QR approach (qr_flutter package only) is the complete solution.

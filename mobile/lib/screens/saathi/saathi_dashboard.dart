@@ -10,6 +10,7 @@ import '../../services/saathi_service.dart';
 import '../../services/ride_service.dart';
 import '../../widgets/sos_button.dart';
 import 'saathi_ride_screen.dart';
+import 'payment_confirm_screen.dart';
 
 class SaathiDashboard extends StatefulWidget {
   const SaathiDashboard({super.key});
@@ -31,6 +32,7 @@ class _SaathiDashboardState extends State<SaathiDashboard>
   StreamSubscription? _locationSub;
   StreamSubscription? _saathiSub;
   bool _popupShown = false;
+  RideModel? _pendingPaymentRide; // completed but paymentConfirmedBySaathi==false
   late AnimationController _onlineCtrl;
   late Animation<double> _onlineAnim;
 
@@ -60,6 +62,15 @@ class _SaathiDashboardState extends State<SaathiDashboard>
           _todayEarnings = (earnings['today'] ?? 0).toDouble();
           _todayRides = (earnings['todayRides'] ?? 0).toInt();
         });
+      }
+    } catch (_) {}
+    // Check for completed rides where saathi hasn't confirmed payment yet
+    // (e.g. app was closed between ride completion and payment confirmation)
+    try {
+      final unconfirmedDoc =
+          await RideService.getUnconfirmedPaymentRide(_uid!);
+      if (unconfirmedDoc != null && mounted) {
+        setState(() => _pendingPaymentRide = RideModel.fromFirestore(unconfirmedDoc));
       }
     } catch (_) {}
     _listenForRides();
@@ -271,6 +282,68 @@ class _SaathiDashboardState extends State<SaathiDashboard>
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(children: [
+              // ── Pending payment recovery banner ──────────────────────────
+              if (_pendingPaymentRide != null) ...[
+                GestureDetector(
+                  onTap: () {
+                    final ride = _pendingPaymentRide!;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PaymentConfirmScreen(
+                          rideId: ride.rideId,
+                          fare: ride.fare,
+                          customerName: ride.customerName,
+                          paymentMethod: ride.paymentMethod,
+                        ),
+                      ),
+                    ).then((_) {
+                      // Recheck after returning
+                      RideService.getUnconfirmedPaymentRide(_uid!).then((doc) {
+                        if (mounted) {
+                          setState(() => _pendingPaymentRide =
+                              doc != null ? RideModel.fromFirestore(doc) : null);
+                        }
+                      });
+                    });
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3CD),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFFFB300), width: 1.5),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.warning_amber_rounded,
+                          color: Color(0xFFB45309), size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Payment pending confirmation',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Color(0xFF92400E))),
+                            Text(
+                              'Tap to confirm payment for ${_pendingPaymentRide!.customerName} — ₹${_pendingPaymentRide!.fare.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                  fontSize: 12, color: Color(0xFF92400E)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded,
+                          size: 14, color: Color(0xFF92400E)),
+                    ]),
+                  ),
+                ),
+              ],
+
               // Online toggle card — animated gradient
               GestureDetector(
                 onTap: _toggling ? null : _toggleOnline,

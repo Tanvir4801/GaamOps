@@ -26,7 +26,7 @@ function SaathiTable({ drivers, onStatusChange }) {
       <table className="min-w-full text-left text-sm">
         <thead className="bg-slate-50 text-slate-600">
           <tr>
-            {['Name', 'Phone', 'Village', 'Vehicle', 'Registered', 'Status', 'Actions'].map((h) => (
+            {['Name', 'Phone', 'Village', 'Vehicle', 'Registered', 'Earnings', 'Status', 'Actions'].map((h) => (
               <th key={h} className="px-4 py-3 font-semibold">{h}</th>
             ))}
           </tr>
@@ -39,6 +39,7 @@ function SaathiTable({ drivers, onStatusChange }) {
               <td className="px-4 py-3">{driver.village || '—'}</td>
               <td className="px-4 py-3">{driver.vehicle || driver.vehicleType || '—'}</td>
               <td className="px-4 py-3 text-slate-500 text-xs">{formatRegisteredOn(driver)}</td>
+              <td className="px-4 py-3 font-medium text-green-700 text-sm">₹{(driver.totalEarnings || 0).toLocaleString('en-IN')}</td>
               <td className="px-4 py-3">
                 <StatusBadge status={driver.status || 'pending'} />
               </td>
@@ -64,7 +65,7 @@ function SaathiTable({ drivers, onStatusChange }) {
             </tr>
           ))}
           {drivers.length === 0 && (
-            <tr><td colSpan={7} className="px-4 py-2">
+            <tr><td colSpan={8} className="px-4 py-2">
               <EmptyTableState message="No Saathi found." />
             </td></tr>
           )}

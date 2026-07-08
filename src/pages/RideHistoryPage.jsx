@@ -22,16 +22,19 @@ function StatusBadge({ status }) {
 }
 
 const PAYMENT_STATUS_BADGE = {
-  paid: 'badge-green',
-  pending: 'badge-yellow',
-  failed: 'badge-red',
+  paid:      'badge-green',
+  collected: 'badge-green',
+  pending:   'badge-yellow',
+  failed:    'badge-red',
+  disputed:  'badge-red',
 }
 const PAYMENT_METHOD_LABELS = {
-  cash: 'Cash',
-  gpay: 'GPay',
-  phonepe: 'PhonePe',
-  paytm: 'Paytm',
-  upi: 'UPI',
+  cash:       'Cash',
+  upi_direct: 'UPI Direct',
+  gpay:       'GPay',
+  phonepe:    'PhonePe',
+  paytm:      'Paytm',
+  upi:        'UPI',
 }
 
 function PaymentBadges({ ride }) {

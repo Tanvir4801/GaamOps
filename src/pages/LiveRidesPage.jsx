@@ -18,16 +18,19 @@ const formatMoney = (n) => (n != null ? '₹' + Number(n).toLocaleString('en-IN'
 const ACTIVE_STATUSES = ['searching', 'accepted', 'arriving', 'started']
 
 const PAYMENT_STATUS_STYLES = {
-  paid: { bg: '#dcfce7', color: '#166534' },
-  pending: { bg: '#fef9c3', color: '#854d0e' },
-  failed: { bg: '#fee2e2', color: '#991b1b' },
+  paid:      { bg: '#dcfce7', color: '#166534' },
+  collected: { bg: '#dcfce7', color: '#166534' },
+  pending:   { bg: '#fef9c3', color: '#854d0e' },
+  failed:    { bg: '#fee2e2', color: '#991b1b' },
+  disputed:  { bg: '#fce7f3', color: '#9d174d' },
 }
 const PAYMENT_METHOD_LABELS = {
-  cash: 'Cash',
-  gpay: 'GPay',
-  phonepe: 'PhonePe',
-  paytm: 'Paytm',
-  upi: 'UPI',
+  cash:       'Cash',
+  upi_direct: 'UPI Direct',
+  gpay:       'GPay',
+  phonepe:    'PhonePe',
+  paytm:      'Paytm',
+  upi:        'UPI',
 }
 
 function PaymentCell({ ride }) {

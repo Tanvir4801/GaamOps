@@ -27,6 +27,7 @@ class RideModel {
   final int rating;
   final String paymentMethod;
   final String paymentStatus;
+  final bool paymentConfirmedBySaathi;
   final String paymentId;
   final String razorpayOrderId;
   final double baseFare;
@@ -49,9 +50,11 @@ class RideModel {
   static const cancelled = 'cancelled';
 
   static const paymentCash = 'cash';
-  static const paymentUpi = 'upi';
+  static const paymentUpi = 'upi';          // legacy — prefer paymentUpiDirect
+  static const paymentUpiDirect = 'upi_direct';
   static const paymentPending = 'pending';
-  static const paymentPaid = 'paid';
+  static const paymentPaid = 'paid';         // legacy — prefer paymentCollected
+  static const paymentCollected = 'collected';
 
   const RideModel({
     required this.rideId,
@@ -80,6 +83,7 @@ class RideModel {
     this.rating = 0,
     this.paymentMethod = paymentCash,
     this.paymentStatus = paymentPending,
+    this.paymentConfirmedBySaathi = false,
     this.paymentId = '',
     this.razorpayOrderId = '',
     this.baseFare = 0,
@@ -124,6 +128,7 @@ class RideModel {
       rating: (d['rating'] ?? 0).toInt(),
       paymentMethod: d['paymentMethod'] ?? paymentCash,
       paymentStatus: d['paymentStatus'] ?? paymentPending,
+      paymentConfirmedBySaathi: d['paymentConfirmedBySaathi'] == true,
       paymentId: d['paymentId'] ?? '',
       razorpayOrderId: d['razorpayOrderId'] ?? '',
       baseFare: (d['baseFare'] ?? 0).toDouble(),

@@ -9,6 +9,7 @@ import '../../models/ride_model.dart';
 import '../../services/ride_service.dart';
 import '../../services/saathi_location_service.dart';
 import '../../widgets/fullscreen_ride_map.dart';
+import 'payment_confirm_screen.dart';
 
 // Mahuva Taluka bounds
 const _swBound = LatLng(20.78, 73.19);
@@ -266,15 +267,28 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
   }
 
   Future<void> _completeRide() async {
-    // Cancel the ride-doc listener first so the remote-completion handler
-    // above doesn't also fire and double-navigate once we write the status.
+    // Cancel listener first so the remote-completion handler above doesn't
+    // double-navigate once we write the status.
     await _rideSub?.cancel();
     await _setLoading(() async {
       await SaathiLocationService.stopTracking();
       await RideService.completeRide(widget.ride.rideId);
     });
     widget.onComplete();
-    if (mounted) Navigator.pop(context);
+    if (mounted) {
+      final ride = _ride ?? widget.ride;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentConfirmScreen(
+            rideId: widget.ride.rideId,
+            fare: ride.fare,
+            customerName: ride.customerName,
+            paymentMethod: ride.paymentMethod,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _cancelRide() async {

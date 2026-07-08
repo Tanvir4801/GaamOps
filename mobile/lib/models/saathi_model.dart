@@ -15,6 +15,9 @@ class SaathiModel {
   final double rating;
   final int totalRides;
   final String fcmToken;
+  final String upiId;
+  final String upiName;
+  final double totalEarnings;
   final DateTime? createdAt;
 
   const SaathiModel({
@@ -32,6 +35,9 @@ class SaathiModel {
     this.rating = 5.0,
     this.totalRides = 0,
     this.fcmToken = '',
+    this.upiId = '',
+    this.upiName = '',
+    this.totalEarnings = 0.0,
     this.createdAt,
   });
 
@@ -52,6 +58,9 @@ class SaathiModel {
       rating: (d['rating'] ?? 5.0).toDouble(),
       totalRides: (d['totalRides'] ?? 0).toInt(),
       fcmToken: d['fcmToken'] ?? '',
+      upiId: d['upiId'] as String? ?? '',
+      upiName: d['upiName'] as String? ?? '',
+      totalEarnings: (d['totalEarnings'] ?? 0.0).toDouble(),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     );
   }

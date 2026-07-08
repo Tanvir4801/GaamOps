@@ -53,10 +53,8 @@ class RideService {
       'cancelReason': '',
       'rating': 0,
       'paymentMethod': paymentMethod,
-      // Honest by default: nothing is "paid" until money actually moves.
-      // Cash is confirmed by the rider at ride completion; online methods
-      // are only marked paid after a real Razorpay payment succeeds.
       'paymentStatus': RideModel.paymentPending,
+      'paymentConfirmedBySaathi': false,
       'paymentId': '',
       'razorpayOrderId': '',
       'baseFare': baseFare,
@@ -70,6 +68,7 @@ class RideService {
       'acceptedAt': null,
       'startedAt': null,
       'completedAt': null,
+      'paymentConfirmedAt': null,
     });
     return ref.id;
   }
@@ -100,37 +99,40 @@ class RideService {
     });
   }
 
+  /// Marks ride completed. Does NOT increment earnings — that happens in
+  /// confirmPayment once saathi physically receives the money.
   static Future<void> completeRide(String rideId) async {
     await _rides.doc(rideId).update({
       'status': RideModel.completed,
       'completedAt': FieldValue.serverTimestamp(),
     });
-    final snap = await _rides.doc(rideId).get();
-    final saathiId = (snap.data() as Map)['saathiId'] as String?;
-    if (saathiId != null && saathiId.isNotEmpty) {
-      await FirebaseFirestore.instance
-          .collection('saathis')
-          .doc(saathiId)
-          .update({'totalRides': FieldValue.increment(1)});
-    }
   }
 
-  /// Records the outcome of a real payment attempt (Razorpay or cash).
-  /// This is the ONLY place `paymentStatus` should ever move to `paid`.
-  static Future<void> updatePayment({
+  /// Called by saathi after collecting cash or confirming UPI transfer.
+  /// Uses a batch write so ride confirmation and earnings update are atomic.
+  /// This is the ONLY place paymentConfirmedBySaathi becomes true.
+  static Future<void> confirmPayment({
     required String rideId,
-    required String method, // 'gpay' | 'phonepe' | 'paytm' | 'upi' | 'cash'
-    required String status, // RideModel.paymentPaid | paymentPending | 'failed'
-    String paymentId = '',
-    String razorpayOrderId = '',
+    required String saathiId,
+    required double fare,
   }) async {
-    await _rides.doc(rideId).update({
-      'paymentMethod': method,
-      'paymentStatus': status,
-      'paymentId': paymentId,
-      'razorpayOrderId': razorpayOrderId,
-      if (status == RideModel.paymentPaid) 'paidAt': FieldValue.serverTimestamp(),
+    final batch = FirebaseFirestore.instance.batch();
+
+    batch.update(_rides.doc(rideId), {
+      'paymentStatus': RideModel.paymentCollected,
+      'paymentConfirmedBySaathi': true,
+      'paymentConfirmedAt': FieldValue.serverTimestamp(),
     });
+
+    batch.update(
+      FirebaseFirestore.instance.collection('saathis').doc(saathiId),
+      {
+        'totalRides': FieldValue.increment(1),
+        'totalEarnings': FieldValue.increment(fare),
+      },
+    );
+
+    await batch.commit();
   }
 
   static Future<void> cancelRide(String rideId, String reason) async {
@@ -198,8 +200,20 @@ class RideService {
         .snapshots();
   }
 
+  /// Returns a completed ride where saathi hasn't confirmed payment yet.
+  /// Used by saathi dashboard to show a recovery banner if the app was closed
+  /// between ride completion and payment confirmation.
+  static Future<DocumentSnapshot?> getUnconfirmedPaymentRide(String saathiId) async {
+    final snap = await _rides
+        .where('saathiId', isEqualTo: saathiId)
+        .where('status', isEqualTo: RideModel.completed)
+        .where('paymentConfirmedBySaathi', isEqualTo: false)
+        .limit(1)
+        .get();
+    return snap.docs.isEmpty ? null : snap.docs.first;
+  }
+
   static Future<List<QueryDocumentSnapshot>> getCustomerHistory(String customerId) async {
-    // No orderBy — avoids composite index requirement; sort client-side
     final snap = await _rides
         .where('customerId', isEqualTo: customerId)
         .limit(50)
@@ -218,7 +232,6 @@ class RideService {
   }
 
   static Future<List<QueryDocumentSnapshot>> getSaathiHistory(String saathiId) async {
-    // No orderBy — avoids composite index requirement; sort client-side
     final snap = await _rides
         .where('saathiId', isEqualTo: saathiId)
         .limit(50)

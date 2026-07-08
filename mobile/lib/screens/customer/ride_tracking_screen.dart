@@ -12,7 +12,7 @@ import '../../widgets/loading_overlay.dart';
 import '../../widgets/radar_searching_widget.dart';
 import '../../widgets/fullscreen_ride_map.dart';
 import 'ride_complete_screen.dart';
-import 'payment_screen.dart';
+import 'ride_summary_screen.dart';
 
 // Mahuva Taluka service area
 const _swBound = LatLng(20.78, 73.19);
@@ -77,21 +77,23 @@ class _RideTrackingScreenState extends State<RideTrackingScreen>
         }
       }
 
-      if (ride.status == RideModel.completed) {
+      // Payment confirmed — covers new (paymentConfirmedBySaathi) and
+      // legacy docs (paymentStatus already 'paid'/'collected').
+      final paymentDone = ride.paymentConfirmedBySaathi ||
+          ride.paymentStatus == RideModel.paymentPaid ||
+          ride.paymentStatus == RideModel.paymentCollected;
+      if (ride.status == RideModel.completed && paymentDone) {
         _rideSub?.cancel();
         if (mounted) {
-          final needsPayment = ride.paymentStatus != RideModel.paymentPaid;
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(
-              builder: (_) => needsPayment
-                  ? PaymentScreen(ride: ride)
-                  : RideCompleteScreen(ride: ride),
-            ),
+            MaterialPageRoute(builder: (_) => RideSummaryScreen(ride: ride)),
             (r) => r.isFirst,
           );
         }
       }
+      // Ride completed but waiting for saathi to confirm → stay on screen
+      // (handled by _buildWaitingForPayment in build())
     });
   }
 
@@ -480,11 +482,127 @@ class _RideTrackingScreenState extends State<RideTrackingScreen>
 
   @override
   Widget build(BuildContext context) {
+    // ── Ride completed, waiting for saathi to confirm payment ──
+    // Also handles legacy docs: if status==completed but paymentStatus is
+    // already 'paid'/'collected', skip the waiting screen entirely.
+    if (_ride != null && _ride!.status == RideModel.completed) {
+      final paymentDone = _ride!.paymentConfirmedBySaathi ||
+          _ride!.paymentStatus == RideModel.paymentPaid ||
+          _ride!.paymentStatus == RideModel.paymentCollected;
+      if (!paymentDone) return _buildWaitingForPayment(context);
+      // paymentDone==true but stream hasn't fired navigate yet — fallthrough
+      // to preStarted (blank) momentarily; the listener will navigate away.
+    }
     // ── After ride starts: dedicated full-screen, fully-interactive map ──
     if (_ride != null && _ride!.status == RideModel.started) {
       return _buildFullscreenStarted(context);
     }
     return _buildPreStarted(context);
+  }
+
+  // ─── Waiting for saathi to confirm payment ───
+  Widget _buildWaitingForPayment(BuildContext context) {
+    final ride = _ride!;
+    final isCash = ride.paymentMethod == RideModel.paymentCash;
+    final topPad = MediaQuery.of(context).padding.top;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Padding(
+        padding: EdgeInsets.fromLTRB(24, topPad + 32, 24, bottomPad + 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Pulsing money icon
+            Container(
+              width: 90, height: 90,
+              decoration: BoxDecoration(
+                color: isCash
+                    ? const Color(0xFFDCFCE7)
+                    : const Color(0xFFDBEAFE),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: (isCash
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFF1D4ED8))
+                          .withAlpha(40),
+                      blurRadius: 20,
+                      spreadRadius: 4),
+                ],
+              ),
+              child: Icon(
+                isCash ? Icons.payments_rounded : Icons.qr_code_2_rounded,
+                size: 44,
+                color: isCash
+                    ? const Color(0xFF16A34A)
+                    : const Color(0xFF1D4ED8),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            const Text('Ride complete!',
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textDark)),
+            const SizedBox(height: 8),
+            Text(
+              isCash
+                  ? 'Waiting for ${ride.saathiName.isNotEmpty ? ride.saathiName : 'saathi'} to confirm cash receipt…'
+                  : 'Waiting for ${ride.saathiName.isNotEmpty ? ride.saathiName : 'saathi'} to confirm UPI payment…',
+              style: const TextStyle(
+                  fontSize: 15, color: AppColors.textGrey),
+              textAlign: TextAlign.center,
+            ),
+
+            const SizedBox(height: 20),
+
+            // Fare
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withAlpha(8), blurRadius: 12),
+                ],
+              ),
+              child: Text(
+                '₹${ride.fare.toStringAsFixed(0)}',
+                style: const TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryOrange,
+                    letterSpacing: -1),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primaryGreen)),
+              const SizedBox(width: 8),
+              Text(
+                '${ride.pickupVillage} → ${ride.destinationVillage}',
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textGrey),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
   }
 
   // ─── Full-screen map once the ride has started ───
