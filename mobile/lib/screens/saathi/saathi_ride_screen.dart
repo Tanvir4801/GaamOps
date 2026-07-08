@@ -8,6 +8,7 @@ import '../../constants/app_colors.dart';
 import '../../models/ride_model.dart';
 import '../../services/ride_service.dart';
 import '../../services/saathi_location_service.dart';
+import '../../widgets/fullscreen_ride_map.dart';
 
 // Mahuva Taluka bounds
 const _swBound = LatLng(20.78, 73.19);
@@ -46,8 +47,18 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
 
     // Listen to ride doc for status changes
     _rideSub = RideService.watchRide(widget.ride.rideId).listen((snap) {
-      if (snap.exists && mounted) {
-        setState(() => _ride = RideModel.fromFirestore(snap));
+      if (!snap.exists || !mounted) return;
+      final ride = RideModel.fromFirestore(snap);
+      setState(() => _ride = ride);
+
+      // Remote completion/cancellation (e.g. admin action) → stop tracking
+      // and exit fullscreen back to the previous screen.
+      if (ride.status == RideModel.completed ||
+          ride.status == RideModel.cancelled) {
+        _rideSub?.cancel();
+        SaathiLocationService.stopTracking();
+        widget.onComplete();
+        if (mounted) Navigator.pop(context);
       }
     });
 
@@ -255,6 +266,9 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
   }
 
   Future<void> _completeRide() async {
+    // Cancel the ride-doc listener first so the remote-completion handler
+    // above doesn't also fire and double-navigate once we write the status.
+    await _rideSub?.cancel();
     await _setLoading(() async {
       await SaathiLocationService.stopTracking();
       await RideService.completeRide(widget.ride.rideId);
@@ -290,6 +304,9 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
       ),
     );
     if (confirmed == true) {
+      // Cancel the ride-doc listener first so the remote-completion handler
+      // doesn't also fire and double-navigate once we write the status.
+      await _rideSub?.cancel();
       await _setLoading(() async {
         await SaathiLocationService.stopTracking();
         await RideService.cancelRide(widget.ride.rideId, 'Cancelled by saathi');
@@ -319,9 +336,64 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
   @override
   Widget build(BuildContext context) {
     final ride = _ride ?? widget.ride;
+
+    // ── After ride starts: dedicated full-screen, fully-interactive map ──
+    if (ride.status == RideModel.started) {
+      return _buildFullscreenStarted(context, ride);
+    }
+    return _buildPreStarted(context, ride);
+  }
+
+  // ─── Full-screen map once the ride has started ───
+  Widget _buildFullscreenStarted(BuildContext context, RideModel ride) {
+    final myPos = _myPosition ?? _destLatLng;
+    return FullscreenRideMap(
+      saathiLatLng: myPos,
+      otherMarkerLatLng: _destLatLng,
+      saathiLabel: 'You',
+      otherLabel: 'Destination',
+      title: 'Ride in progress',
+      otherMarkerIcon: Icons.flag_rounded,
+      otherMarkerColor: AppColors.primaryOrange,
+      bottomCard: _SaathiStartedBottomCard(
+        customerName: ride.customerName,
+        customerPhone: ride.customerPhone,
+        pickupVillage: ride.pickupVillage,
+        destinationVillage: ride.destinationVillage,
+        fare: ride.fare,
+        isLoading: _isLoading,
+        onCall: _callCustomer,
+        onComplete: _completeRide,
+        onEmergency: _showEmergencyDialog,
+      ),
+    );
+  }
+
+  Future<void> _showEmergencyDialog() async {
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [
+          Icon(Icons.emergency, color: AppColors.error),
+          SizedBox(width: 8),
+          Text('SOS'),
+        ]),
+        content: const Text('SOS sent to admin.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Existing UI, unchanged: accepted / arriving (OTP) ───
+  Widget _buildPreStarted(BuildContext context, RideModel ride) {
     final isAccepted = ride.status == RideModel.accepted;
     final isArriving = ride.status == RideModel.arriving;
-    final isStarted = ride.status == RideModel.started;
     final topPad = MediaQuery.of(context).padding.top;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
@@ -606,13 +678,6 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
                   color: AppColors.primaryGreen,
                   onTap: _startRide,
                 ),
-              ] else if (isStarted) ...[
-                _actionButton(
-                  label: 'Complete Ride · પૂર્ણ',
-                  icon: Icons.check_circle,
-                  color: AppColors.primaryGreen,
-                  onTap: _completeRide,
-                ),
               ],
 
               const SizedBox(height: 8),
@@ -678,5 +743,116 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
       case RideModel.started: return '🚀 Ride in progress · સવારી ચાલુ';
       default: return 'Ride Active';
     }
+  }
+}
+
+// ─────────────────────────────────────────
+// Bottom info card — shown once ride status == started (Saathi view)
+// ─────────────────────────────────────────
+
+class _SaathiStartedBottomCard extends StatelessWidget {
+  final String customerName;
+  final String customerPhone;
+  final String pickupVillage;
+  final String destinationVillage;
+  final double fare;
+  final bool isLoading;
+  final VoidCallback onCall;
+  final VoidCallback onComplete;
+  final VoidCallback onEmergency;
+
+  const _SaathiStartedBottomCard({
+    required this.customerName,
+    required this.customerPhone,
+    required this.pickupVillage,
+    required this.destinationVillage,
+    required this.fare,
+    required this.isLoading,
+    required this.onCall,
+    required this.onComplete,
+    required this.onEmergency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 160),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withAlpha(30), blurRadius: 20),
+        ],
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Customer name + phone
+        Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(customerName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15)),
+                GestureDetector(
+                  onTap: onCall,
+                  child: Text(customerPhone,
+                      style: const TextStyle(
+                          color: AppColors.primaryGreen, fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+          Text('₹${fare.toStringAsFixed(0)}',
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.primaryGreen)),
+        ]),
+        const SizedBox(height: 8),
+        // Pickup → destination
+        Text('$pickupVillage → $destinationVillage',
+            style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
+        const SizedBox(height: 12),
+        if (isLoading)
+          const CircularProgressIndicator(color: AppColors.primaryGreen)
+        else
+          Row(children: [
+            Expanded(
+              child: SizedBox(
+                height: 46,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryGreen,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.check_circle,
+                      color: Colors.white, size: 18),
+                  label: const Text('Complete Ride',
+                      style: TextStyle(color: Colors.white)),
+                  onPressed: onComplete,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              height: 46,
+              width: 46,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.sosRed,
+                  padding: EdgeInsets.zero,
+                  shape: const CircleBorder(),
+                ),
+                onPressed: onEmergency,
+                child: const Icon(Icons.emergency,
+                    color: Colors.white, size: 20),
+              ),
+            ),
+          ]),
+      ]),
+    );
   }
 }

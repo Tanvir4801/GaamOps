@@ -1,0 +1,202 @@
+In the GaamRide Flutter app, update the ride tracking map for BOTH the Saathi (driver) screen and Customer screen.
+
+EXACT REQUIREMENT:
+- Before ride starts (status: searching / accepted / arriving / otp screen) → keep current layout (map is partial / half screen — do NOT change this)
+- After ride starts (status: started) → map becomes FULL SCREEN, interactive, touchable, real-time
+- After ride completes (status: completed / cancelled) → exit fullscreen, return to normal summary screen
+
+---
+
+PACKAGE TO USE:
+flutter_map: ^6.1.0         ← OpenStreetMap, no API key needed
+latlong2: ^0.9.0            ← LatLng type for flutter_map
+geolocator: ^11.0.0         ← already in project
+
+Add to pubspec.yaml if not present:
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+
+---
+
+FILE 1 — lib/screens/customer/ride_tracking_screen.dart
+(Customer sees Saathi moving toward them, then driving the ride)
+
+SCREEN LOGIC:
+- Listen to rides/{rideId} document in real-time (StreamBuilder on Firestore)
+- Extract status, saathiLat, saathiLng from snapshot
+- If status != 'started' → show existing partial-map UI (do not change)
+- If status == 'started' → show FullscreenRideMap widget (see below)
+- If status == 'completed' or 'cancelled' → pop to home or show summary
+
+FULLSCREEN MAP BEHAVIOR (when status == started):
+- Map takes entire screen: width = double.infinity, height = double.infinity
+- Wrap in Scaffold with extendBodyBehindAppBar: true
+- AppBar: transparent bg, only a back arrow (white) and title "Ride in progress" (white text)
+- TileLayer: OpenStreetMap tiles
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+    userAgentPackageName: 'com.gaamride.app'
+- Show TWO markers:
+    1. Saathi marker: orange scooter icon (use Icon widget inside MarkerLayer)
+       position: LatLng(saathiLat, saathiLng) from Firestore
+    2. Customer marker: blue person icon
+       position: LatLng(customerPickupLat, customerPickupLng) from ride doc
+- MapController: auto-pan to Saathi position every time saathiLat/Lng updates
+    → mapController.move(saathiLatLng, currentZoom)
+    → do NOT reset zoom, just move center
+- Default zoom: 15.0
+- Map is fully interactive: user can pinch-zoom, drag, pan freely
+- Show bottom info card FLOATING over map (not inside map):
+    Position: bottom: 0, left: 0, right: 0
+    Style: white card, rounded top corners (24px), padding 20px
+    Contents:
+      Row 1: Saathi name + vehicle number (from ride doc)
+      Row 2: Status chip "Ride started 🟢"
+      Row 3: OTP shown (so customer can reference it)
+      Row 4: SOS button (red, just shows dialog "SOS sent to admin" for now)
+    Card height: ~160px (does NOT cover full screen)
+
+REAL-TIME UPDATE LOGIC:
+StreamBuilder(
+  stream: FirebaseFirestore.instance.collection('rides').doc(rideId).snapshots(),
+  builder: (context, snapshot) {
+    final data = snapshot.data?.data() as Map?;
+    final status = data?['status'] ?? '';
+    final saathiLat = (data?['saathiLat'] ?? 0.0).toDouble();
+    final saathiLng = (data?['saathiLng'] ?? 0.0).toDouble();
+    if (status == 'started') return FullscreenRideMap(...)
+    if (status == 'completed') { WidgetsBinding.instance.addPostFrameCallback((_) => Navigator.pop(context)); return SizedBox(); }
+    return ExistingPartialMapUI(...); ← your existing widget, unchanged
+  }
+)
+
+---
+
+FILE 2 — lib/screens/saathi/active_ride_screen.dart
+(Saathi sees destination, drives there, updates location)
+
+SCREEN LOGIC:
+- Listen to rides/{rideId} in real-time
+- If status == 'started' → show fullscreen map
+- If status == 'completed' → show ride complete summary, stop location updates
+- Status before 'started' → existing OTP / accept screen (do NOT touch)
+
+FULLSCREEN MAP BEHAVIOR (same as customer but Saathi perspective):
+- Map takes full screen, same setup as customer
+- Show TWO markers:
+    1. Saathi marker (orange): Saathi's OWN live GPS position (from Geolocator stream)
+    2. Destination marker (green flag): LatLng(destinationLat, destinationLng) from ride doc
+- Auto-pan to Saathi's own position every time GPS updates
+- Saathi's GPS → also write to Firestore every 5 seconds:
+    rides/{rideId}.saathiLat = currentLat
+    rides/{rideId}.saathiLng = currentLng
+    saathis/{uid}.position = GeoFirePoint(lat, lng).data
+    saathis/{uid}.lastSeen = FieldValue.serverTimestamp()
+
+SAATHI GPS UPDATE TIMER:
+- Start Timer.periodic(Duration(seconds: 5), ...) when ride starts
+- Cancel timer when ride completes or screen disposes
+- Use _positionStreamSubscription from Geolocator.getPositionStream()
+
+SAATHI LOCATION STREAM SETUP:
+final LocationSettings locationSettings = LocationSettings(
+  accuracy: LocationAccuracy.high,
+  distanceFilter: 10, ← update when moved 10 metres
+);
+_positionStream = Geolocator.getPositionStream(locationSettings: locationSettings)
+  .listen((Position pos) {
+    setState(() { _saathiLatLng = LatLng(pos.latitude, pos.longitude); });
+    mapController.move(_saathiLatLng, mapController.camera.zoom);
+    _writeLocationToFirestore(pos.latitude, pos.longitude);
+  });
+
+FLOATING BOTTOM CARD FOR SAATHI:
+  - Customer name + phone (tap phone → launches dialer via url_launcher)
+  - Pickup village → Destination village
+  - Fare: ₹{fare}
+  - "Complete Ride" green button → updateDoc rides/{rideId} { status: 'completed', completedAt: serverTimestamp() }
+    → also increment saathis/{uid}.totalRides by 1
+    → cancel location stream
+  - "Emergency" red button → shows dialog
+
+---
+
+FILE 3 — lib/widgets/fullscreen_ride_map.dart
+(Reusable widget used by both screens above)
+
+class FullscreenRideMap extends StatefulWidget {
+  final LatLng saathiLatLng;       ← updated live from parent
+  final LatLng otherMarkerLatLng;  ← customer pickup (customer view) OR destination (saathi view)
+  final String saathiLabel;        ← "Saathi" or driver name
+  final String otherLabel;         ← "Your pickup" or "Destination"
+  final Widget bottomCard;         ← floating card passed from parent
+}
+
+IMPLEMENTATION:
+- MapController _mapController = MapController();
+- In didUpdateWidget: if new saathiLatLng != old → _mapController.move(saathiLatLng, _mapController.camera.zoom)
+- FlutterMap widget:
+    options: MapOptions(
+      initialCenter: saathiLatLng,
+      initialZoom: 15.0,
+      interactionOptions: InteractionOptions(
+        flags: InteractiveFlag.all, ← allows pinch, drag, rotate, all gestures
+      ),
+    )
+    children: [
+      TileLayer(
+        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        userAgentPackageName: 'com.gaamride.app',
+        maxZoom: 19,
+      ),
+      MarkerLayer(markers: [
+        Marker(
+          point: saathiLatLng,
+          width: 48, height: 48,
+          child: Container(
+            decoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
+            child: Icon(Icons.electric_scooter, color: Colors.white, size: 26),
+          ),
+        ),
+        Marker(
+          point: otherMarkerLatLng,
+          width: 44, height: 44,
+          child: Icon(Icons.location_pin, color: Colors.blue, size: 44),
+        ),
+      ]),
+    ]
+- Stack the bottom card over the map:
+    return Stack(
+      children: [
+        FlutterMap(...),           ← fills entire Stack
+        Positioned(bottom: 0, left: 0, right: 0,
+          child: bottomCard,       ← floating card from parent
+        ),
+      ],
+    );
+
+---
+
+WHAT TO NOT CHANGE:
+- OTP entry screen layout
+- Ride searching screen (searching status)
+- Saathi accept/decline screen
+- Any screen before status == 'started'
+- Login, registration, home screens
+- Admin panel files
+
+WHAT TO UPDATE:
+- customer/ride_tracking_screen.dart → add fullscreen branch when status==started
+- saathi/active_ride_screen.dart → add fullscreen branch + GPS write loop
+- Create new: lib/widgets/fullscreen_ride_map.dart
+- pubspec.yaml → add flutter_map + latlong2 if missing
+
+CONSTRAINTS:
+- flutter_map only (OpenStreetMap) — no Google Maps, no mapbox
+- No API keys required
+- Map must be 100% touch-interactive when fullscreen (zoom, pan, drag)
+- Location updates write to Firestore every 5 seconds from Saathi side
+- Customer map auto-follows Saathi marker in real-time via Firestore stream
+- Bottom info card must float over map, NOT push the map up
+- All existing screens before ride start must remain exactly as they are
+Copied!'; setTimeout(()=>{b.classList.remove('ok');b.innerHTML='
+Copy full prompt';},2200); }); ">

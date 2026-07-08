@@ -10,6 +10,7 @@ import '../../services/ride_service.dart';
 import '../../services/emergency_contact_service.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/radar_searching_widget.dart';
+import '../../widgets/fullscreen_ride_map.dart';
 import 'ride_complete_screen.dart';
 
 // Mahuva Taluka service area
@@ -473,7 +474,36 @@ class _RideTrackingScreenState extends State<RideTrackingScreen>
 
   @override
   Widget build(BuildContext context) {
-    final saathiName = _ride?.saathiName ?? '—';
+    // ── After ride starts: dedicated full-screen, fully-interactive map ──
+    if (_ride != null && _ride!.status == RideModel.started) {
+      return _buildFullscreenStarted(context);
+    }
+    return _buildPreStarted(context);
+  }
+
+  // ─── Full-screen map once the ride has started ───
+  Widget _buildFullscreenStarted(BuildContext context) {
+    final ride = _ride!;
+    final saathiPos = _saathiPosition ?? _pickupLatLng;
+    return FullscreenRideMap(
+      saathiLatLng: saathiPos,
+      otherMarkerLatLng: _pickupLatLng,
+      saathiLabel: ride.saathiName,
+      otherLabel: 'Your pickup',
+      title: 'Ride in progress',
+      otherMarkerIcon: Icons.person_pin_circle,
+      otherMarkerColor: Colors.blue.shade600,
+      bottomCard: _StartedBottomCard(
+        saathiName: ride.saathiName,
+        vehicleType: ride.vehicleType,
+        otp: ride.otp,
+        onSOS: _showSOS,
+      ),
+    );
+  }
+
+  // ─── Existing UI, unchanged: searching / accepted / arriving / otp ───
+  Widget _buildPreStarted(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
@@ -751,6 +781,92 @@ class _SaathiDotState extends State<_SaathiDot>
           ),
         ]),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+// Bottom info card — shown once ride status == started
+// ─────────────────────────────────────────
+
+class _StartedBottomCard extends StatelessWidget {
+  final String saathiName;
+  final String vehicleType;
+  final String otp;
+  final VoidCallback onSOS;
+
+  const _StartedBottomCard({
+    required this.saathiName,
+    required this.vehicleType,
+    required this.otp,
+    required this.onSOS,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 160),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withAlpha(30), blurRadius: 20),
+        ],
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Row 1 — Saathi name + vehicle
+        Row(children: [
+          Expanded(
+            child: Text('$saathiName · $vehicleType',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 15),
+                overflow: TextOverflow.ellipsis),
+          ),
+          // Row 2 — status chip
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.bgGreen,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text('Ride started 🟢',
+                style: TextStyle(
+                    color: AppColors.primaryGreen,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        // Row 3 — OTP reference
+        Row(children: [
+          const Text('OTP: ',
+              style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+          Text(otp,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  letterSpacing: 4)),
+          const Spacer(),
+          // Row 4 — SOS button
+          GestureDetector(
+            onTap: onSOS,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.sosRed,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text('SOS 🆘',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+            ),
+          ),
+        ]),
+      ]),
     );
   }
 }
