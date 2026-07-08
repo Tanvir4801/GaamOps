@@ -17,6 +17,38 @@ const formatMoney = (n) => (n != null ? '₹' + Number(n).toLocaleString('en-IN'
 
 const ACTIVE_STATUSES = ['searching', 'accepted', 'arriving', 'started']
 
+const PAYMENT_STATUS_STYLES = {
+  paid: { bg: '#dcfce7', color: '#166534' },
+  pending: { bg: '#fef9c3', color: '#854d0e' },
+  failed: { bg: '#fee2e2', color: '#991b1b' },
+}
+const PAYMENT_METHOD_LABELS = {
+  cash: 'Cash',
+  gpay: 'GPay',
+  phonepe: 'PhonePe',
+  paytm: 'Paytm',
+  upi: 'UPI',
+}
+
+function PaymentCell({ ride }) {
+  const method = ride.paymentMethod || 'cash'
+  const status = ride.paymentStatus || 'pending'
+  const statusStyle = PAYMENT_STATUS_STYLES[status] || { bg: '#f3f4f6', color: '#374151' }
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+        {PAYMENT_METHOD_LABELS[method] || method}
+      </span>
+      <span
+        className="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
+        style={{ backgroundColor: statusStyle.bg, color: statusStyle.color }}
+      >
+        {status}
+      </span>
+    </div>
+  )
+}
+
 export default function LiveRidesPage() {
   const { data: rides, loading } = useCollection('rides', orderBy('createdAt', 'desc'))
   const [statusFilter, setStatusFilter] = useState('all')
@@ -98,7 +130,7 @@ export default function LiveRidesPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Ride ID','Customer','Saathi','Route','Status','Fare','Dist','OTP','Time','Actions'].map((h) => (
+                  {['Ride ID','Customer','Saathi','Route','Status','Payment','Fare','Dist','OTP','Time','Actions'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
                   ))}
                 </tr>
@@ -123,6 +155,7 @@ export default function LiveRidesPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{r.pickupVillage} → {r.destinationVillage}</td>
                     <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                    <td className="px-4 py-3"><PaymentCell ride={r} /></td>
                     <td className="px-4 py-3">{formatMoney(r.fare)}</td>
                     <td className="px-4 py-3 text-xs">{r.distance ? `${r.distance} km` : '—'}</td>
                     <td className="px-4 py-3 font-mono text-xs">{r.otp || '—'}</td>
@@ -163,6 +196,7 @@ export default function LiveRidesPage() {
                 ['Destination', `${detail.destinationVillage} (${detail.destinationLat}, ${detail.destinationLng})`],
                 ['Saathi Location', detail.saathiLat ? `${detail.saathiLat}, ${detail.saathiLng}` : 'no data'],
                 ['Fare', formatMoney(detail.fare)],
+                ['Payment', `${PAYMENT_METHOD_LABELS[detail.paymentMethod] || detail.paymentMethod || 'Cash'} · ${detail.paymentStatus || 'pending'}`],
                 ['Distance', detail.distance ? `${detail.distance} km` : '—'],
                 ['OTP', detail.otp || '—'],
                 ['Rating', detail.rating ?? '—'],

@@ -21,6 +21,30 @@ function StatusBadge({ status }) {
   return <span className={`badge ${cls}`}>{status || '—'}</span>
 }
 
+const PAYMENT_STATUS_BADGE = {
+  paid: 'badge-green',
+  pending: 'badge-yellow',
+  failed: 'badge-red',
+}
+const PAYMENT_METHOD_LABELS = {
+  cash: 'Cash',
+  gpay: 'GPay',
+  phonepe: 'PhonePe',
+  paytm: 'Paytm',
+  upi: 'UPI',
+}
+
+function PaymentBadges({ ride }) {
+  const method = ride.paymentMethod || 'cash'
+  const status = String(ride.paymentStatus || 'pending').toLowerCase()
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="badge badge-gray w-fit">{PAYMENT_METHOD_LABELS[method] || method}</span>
+      <span className={`badge w-fit ${PAYMENT_STATUS_BADGE[status] || 'badge-gray'}`}>{status}</span>
+    </div>
+  )
+}
+
 function RideModal({ ride, onClose }) {
   if (!ride) return null
   const from = firstNonEmpty(ride.pickupVillage, ride.pickupLocation, ride.pickup, ride.fromVillage) || '—'
@@ -42,6 +66,7 @@ function RideModal({ ride, onClose }) {
             ['Pickup', from],
             ['Destination', to],
             ['Fare', ride.fare || ride.amount ? `₹${ride.fare || ride.amount}` : '—'],
+            ['Payment', `${PAYMENT_METHOD_LABELS[ride.paymentMethod] || ride.paymentMethod || 'Cash'} · ${ride.paymentStatus || 'pending'}`],
             ['Status', <StatusBadge key="s" status={ride.status} />],
             ['Created', formatDate(ride.timestamp || ride.createdAt)],
             ['Type', ride.type || 'GaamRide'],
@@ -177,11 +202,12 @@ export default function RideHistoryPage() {
                 <th className="px-4 py-3 font-semibold">Saathi</th>
                 <th className="px-4 py-3 font-semibold">Route</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold">Payment</th>
                 <th className="px-4 py-3 font-semibold">Fare</th>
               </tr>
             </thead>
             <tbody>
-              {loading && <SkeletonRows count={8} cols={7} />}
+              {loading && <SkeletonRows count={8} cols={8} />}
               {!loading && filtered.map((b) => (
                 <tr
                   key={b.id}
@@ -198,13 +224,14 @@ export default function RideHistoryPage() {
                     {firstNonEmpty(b.pickupVillage, b.fromVillage) || '?'} → {firstNonEmpty(b.dropLocation, b.toVillage) || '?'}
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={b.status} /></td>
+                  <td className="px-4 py-3"><PaymentBadges ride={b} /></td>
                   <td className="px-4 py-3 font-semibold text-brand">
                     {b.fare || b.amount ? `₹${b.fare || b.amount}` : '—'}
                   </td>
                 </tr>
               ))}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-2"><EmptyTableState message="No rides found." /></td></tr>
+                <tr><td colSpan={8} className="px-4 py-2"><EmptyTableState message="No rides found." /></td></tr>
               )}
             </tbody>
           </table>

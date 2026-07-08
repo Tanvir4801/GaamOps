@@ -1,0 +1,111 @@
+
+═══ FIRESTORE SAVE METHODS (in payment_screen.dart) ═══
+
+// Online payment confirmed by Razorpay
+Future _saveOnlinePayment(String paymentId) async {
+  try {
+    await FirebaseFirestore.instance
+        .collection('rides')
+        .doc(widget.rideId)
+        .update({
+      'paymentMethod': _selectedMethod,   // 'gpay','phonepe','paytm','upi'
+      'paymentStatus': 'paid',
+      'paymentId': paymentId,             // Razorpay payment ID
+      'paidAt': FieldValue.serverTimestamp(),
+    });
+
+    setState(() => _isProcessing = false);
+    _showSuccessAndNavigate();
+
+  } catch (e) {
+    setState(() => _isProcessing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Saved payment failed: $e')),
+    );
+  }
+}
+
+// Cash payment — no gateway
+Future _saveCashPayment() async {
+  await FirebaseFirestore.instance
+      .collection('rides')
+      .doc(widget.rideId)
+      .update({
+    'paymentMethod': 'cash',
+    'paymentStatus': 'paid',   // cash is always "paid" (honour system)
+    'paymentId': '',
+    'paidAt': FieldValue.serverTimestamp(),
+  });
+
+  setState(() => _isProcessing = false);
+  _showSuccessAndNavigate();
+}
+
+// Navigate to success screen
+void _showSuccessAndNavigate() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 60),
+          const SizedBox(height: 12),
+          const Text('Payment done!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Text('₹${widget.fare.toStringAsFixed(0)} paid', style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFf97316), foregroundColor: Colors.white),
+              onPressed: () {
+                Navigator.of(context).popUntil((r) => r.isFirst);
+              },
+              child: const Text('Back to home'),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+═══ WHERE TO TRIGGER PAYMENT SCREEN ═══
+
+TRIGGER POINT: After ride status == 'completed'
+In the customer's ride tracking StreamBuilder, when status flips to 'completed':
+
+  if (status == 'completed' && data['paymentStatus'] == 'pending') {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.pushReplacement(context, MaterialPageRoute(
+        builder: (_) => PaymentScreen(
+          rideId: rideId,
+          fare: (data['fare'] ?? 0).toDouble(),
+          pickupVillage: data['pickupVillage'] ?? '',
+          destinationVillage: data['destinationVillage'] ?? '',
+          distanceKm: (data['distance'] ?? 0).toDouble(),
+          customerName: data['customerName'] ?? '',
+          customerPhone: data['customerPhone'] ?? '',
+        ),
+      ));
+    });
+  }
+
+ALSO: When creating a new ride in createRide(), set:
+  'paymentMethod': '',
+  'paymentStatus': 'pending',
+  'paymentId': '',
+
+═══ ADMIN PANEL UPDATE ═══
+
+In Rides.jsx table on the React admin panel, add:
+  Column: Payment — show paymentMethod badge + paymentStatus badge
+  paymentStatus 'paid' → green badge
+  paymentStatus 'pending' → yellow badge
+  paymentStatus 'failed' → red badge
+  paymentMethod 'cash' → gray pill "Cash"
+  paymentMethod 'gpay' → blue pill "GPay"
+  etc.

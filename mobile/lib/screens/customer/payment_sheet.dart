@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import '../../models/fare_breakdown.dart';
 
 enum PaymentMethod { cash, upi }
+
+// NOTE: This sheet only records the rider's *preferred* payment method at
+// booking time. The actual charge (real Razorpay checkout for UPI, or an
+// honour-system confirmation for cash) happens on PaymentScreen once the
+// ride is completed — see ride_tracking_screen.dart. Nothing here should
+// ever claim a payment has been made.
 
 class PaymentSheet extends StatefulWidget {
   final FareBreakdown breakdown;
@@ -36,7 +41,6 @@ class PaymentSheet extends StatefulWidget {
 class _PaymentSheetState extends State<PaymentSheet>
     with SingleTickerProviderStateMixin {
   PaymentMethod _selected = PaymentMethod.cash;
-  bool _upiLaunched = false;
   late AnimationController _ctrl;
   late Animation<Offset> _slide;
 
@@ -54,42 +58,6 @@ class _PaymentSheetState extends State<PaymentSheet>
   void dispose() {
     _ctrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _launchUpi() async {
-    final amount = widget.breakdown.totalFare.toStringAsFixed(2);
-    final upiId = widget.breakdown.gaamRideUpi;
-    final uri = Uri(
-      scheme: 'upi',
-      host: 'pay',
-      queryParameters: {
-        'pa': upiId,
-        'pn': 'GaamRide',
-        'am': amount,
-        'tn': 'GaamRide Fare Payment',
-        'cu': 'INR',
-        'mode': '02',
-      },
-    );
-    final uriStr = 'upi://pay?pa=$upiId&pn=GaamRide&am=$amount&tn=GaamRide+Fare&cu=INR';
-    try {
-      final canLaunch = await canLaunchUrl(Uri.parse(uriStr));
-      if (canLaunch) {
-        await launchUrl(Uri.parse(uriStr));
-        setState(() => _upiLaunched = true);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No UPI app found. Please install GPay, PhonePe, or Paytm'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      setState(() => _upiLaunched = true);
-    }
   }
 
   void _copyUpiId() {
@@ -149,10 +117,7 @@ class _PaymentSheetState extends State<PaymentSheet>
                     label: 'Cash',
                     subtitle: 'Pay Saathi directly',
                     selected: _selected == PaymentMethod.cash,
-                    onTap: () => setState(() {
-                      _selected = PaymentMethod.cash;
-                      _upiLaunched = false;
-                    }),
+                    onTap: () => setState(() => _selected = PaymentMethod.cash),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -175,9 +140,6 @@ class _PaymentSheetState extends State<PaymentSheet>
                   : _UpiInfo(
                       key: const ValueKey('upi'),
                       upiId: upiId,
-                      amount: amount,
-                      launched: _upiLaunched,
-                      onLaunch: _launchUpi,
                       onCopy: _copyUpiId,
                     ),
             ),
@@ -199,9 +161,7 @@ class _PaymentSheetState extends State<PaymentSheet>
                 child: Text(
                   _selected == PaymentMethod.cash
                       ? 'Confirm · Pay Cash to Saathi'
-                      : _upiLaunched
-                          ? 'Payment Done · Confirm Ride'
-                          : 'Confirm Ride',
+                      : 'Confirm · Pay via UPI after ride',
                   style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -297,17 +257,11 @@ class _CashInfo extends StatelessWidget {
 
 class _UpiInfo extends StatelessWidget {
   final String upiId;
-  final double amount;
-  final bool launched;
-  final VoidCallback onLaunch;
   final VoidCallback onCopy;
 
   const _UpiInfo({
     super.key,
     required this.upiId,
-    required this.amount,
-    required this.launched,
-    required this.onLaunch,
     required this.onCopy,
   });
 
@@ -365,94 +319,29 @@ class _UpiInfo extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _AppButton(
-                  label: 'GPay',
-                  emoji: '🟢',
-                  onTap: onLaunch,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _AppButton(
-                  label: 'PhonePe',
-                  emoji: '🟣',
-                  onTap: onLaunch,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _AppButton(
-                  label: 'Paytm',
-                  emoji: '🔵',
-                  onTap: onLaunch,
-                ),
-              ),
-            ],
-          ),
-          if (launched) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.bgGreen,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 16),
-                  SizedBox(width: 8),
-                  Text('Payment done? Tap Confirm below',
-                      style: TextStyle(
-                          color: AppColors.primaryGreen,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12)),
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.bgGreen,
+              borderRadius: BorderRadius.circular(8),
             ),
-          ],
+            child: const Row(
+              children: [
+                Icon(Icons.lock_outline, color: AppColors.primaryGreen, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "You'll pay securely via GPay, PhonePe, Paytm or any UPI app (Razorpay checkout) right after your ride ends.",
+                    style: TextStyle(
+                        color: AppColors.primaryGreen,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class _AppButton extends StatelessWidget {
-  final String label;
-  final String emoji;
-  final VoidCallback onTap;
-
-  const _AppButton({
-    required this.label,
-    required this.emoji,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.purple.withAlpha(30)),
-        ),
-        child: Column(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 20)),
-            const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textGrey)),
-          ],
-        ),
       ),
     );
   }

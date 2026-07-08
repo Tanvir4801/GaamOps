@@ -53,9 +53,12 @@ class RideService {
       'cancelReason': '',
       'rating': 0,
       'paymentMethod': paymentMethod,
-      'paymentStatus': paymentMethod == RideModel.paymentUpi
-          ? RideModel.paymentPaid
-          : RideModel.paymentPending,
+      // Honest by default: nothing is "paid" until money actually moves.
+      // Cash is confirmed by the rider at ride completion; online methods
+      // are only marked paid after a real Razorpay payment succeeds.
+      'paymentStatus': RideModel.paymentPending,
+      'paymentId': '',
+      'razorpayOrderId': '',
       'baseFare': baseFare,
       'distanceCharge': distanceCharge,
       'surgeMultiplier': surgeMultiplier,
@@ -110,6 +113,24 @@ class RideService {
           .doc(saathiId)
           .update({'totalRides': FieldValue.increment(1)});
     }
+  }
+
+  /// Records the outcome of a real payment attempt (Razorpay or cash).
+  /// This is the ONLY place `paymentStatus` should ever move to `paid`.
+  static Future<void> updatePayment({
+    required String rideId,
+    required String method, // 'gpay' | 'phonepe' | 'paytm' | 'upi' | 'cash'
+    required String status, // RideModel.paymentPaid | paymentPending | 'failed'
+    String paymentId = '',
+    String razorpayOrderId = '',
+  }) async {
+    await _rides.doc(rideId).update({
+      'paymentMethod': method,
+      'paymentStatus': status,
+      'paymentId': paymentId,
+      'razorpayOrderId': razorpayOrderId,
+      if (status == RideModel.paymentPaid) 'paidAt': FieldValue.serverTimestamp(),
+    });
   }
 
   static Future<void> cancelRide(String rideId, String reason) async {

@@ -1,0 +1,97 @@
+
+═══ lib/screens/customer/payment_screen.dart ═══
+
+Build a beautiful payment selection screen for GaamRide.
+
+CONSTRUCTOR PARAMS:
+  PaymentScreen({
+    required String rideId,
+    required double fare,
+    required String pickupVillage,
+    required String destinationVillage,
+    required double distanceKm,
+    required String customerName,
+    required String customerPhone,
+  })
+
+SCREEN STRUCTURE (Scaffold, no AppBar — custom header):
+
+1. CUSTOM HEADER (orange bg #f97316):
+   - Back arrow (white, left)
+   - Title: "Choose payment" (white, 16sp, weight 500)
+   - Subtitle: "{pickupVillage} → {destinationVillage} • {distanceKm}km" (white, 12sp, 70% opacity)
+
+2. FARE SUMMARY CARD (white card, -12px top margin to overlap header, mx:12, rounded 14px, shadow):
+   Left side:
+     - Label: "Total fare" (11sp, gray)
+     - Amount: "₹{fare}" (28sp, bold, black)
+   Right side:
+     - "{distanceKm} km" (11sp, orange)
+     - "Base ₹20 + ₹8/km" (10sp, gray)
+
+3. SECTION LABEL: "Online payment" (10sp, uppercase, gray, px:16, pt:16)
+
+4. PAYMENT OPTIONS LIST (StatefulWidget, _selectedMethod tracks selection):
+
+   Each option row:
+     - height: 58px
+     - Leading icon (36×36 rounded container, branded color)
+     - Title (13sp, medium) + subtitle (10sp, gray)
+     - Trailing: custom radio button (18px circle, orange when selected)
+     - onTap: setState(() => _selectedMethod = method)
+     - Selected bg: Color(0xFFFFF7ED) (light orange tint)
+
+   OPTIONS:
+   a) Google Pay
+      icon: white box border, "G" blue + "P" green text
+      title: "Google Pay"
+      subtitle: "Pay via GPay UPI"
+      badge: small pill "POPULAR" (orange bg, white text, 9sp)
+      method: 'gpay'
+
+   b) PhonePe
+      icon: purple (#5f259f) box, "Pe" white text
+      title: "PhonePe"
+      subtitle: "Pay via PhonePe UPI"
+      method: 'phonepe'
+
+   c) Paytm
+      icon: dark blue (#002970) box, "Pay" cyan text
+      title: "Paytm"
+      subtitle: "Paytm wallet or UPI"
+      method: 'paytm'
+
+   d) Any UPI app
+      icon: light gray box, "UPI" green text
+      title: "Any UPI app"
+      subtitle: "Enter your UPI ID manually"
+      method: 'upi'
+
+5. THIN DIVIDER (mx:16, color gray 200)
+
+6. SECTION LABEL: "Offline"
+
+7. CASH OPTION:
+   icon: light green box, money emoji
+   title: "Cash"
+   subtitle: "Pay saathi directly after ride"
+   method: 'cash'
+   NOTE: No fake "processing" — cash is honest and immediate
+
+8. BOTTOM AREA (pinned at bottom, px:16, pb:24):
+   PAY BUTTON:
+     height: 52px, full width, borderRadius: 14px
+     bg: #f97316 (orange) for online methods
+     bg: #16a34a (green) for cash
+     text: "Pay ₹{fare} with {method name}" (online)
+           "Confirm cash payment" (cash)
+     font: 15sp, white, weight 600
+     onPressed: _processPayment()
+
+   TRUST BADGE (below button, center):
+     "🔒 Secured by Razorpay" (10sp, gray) — only show for online methods
+     For cash: "No app charges. Pay directly to saathi." (10sp, gray)
+
+LOADING STATE:
+   When payment is processing: show CircularProgressIndicator over the button
+   Disable button tap during processing (bool _isProcessing)

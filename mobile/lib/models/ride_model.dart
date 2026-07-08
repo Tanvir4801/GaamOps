@@ -27,6 +27,8 @@ class RideModel {
   final int rating;
   final String paymentMethod;
   final String paymentStatus;
+  final String paymentId;
+  final String razorpayOrderId;
   final double baseFare;
   final double distanceCharge;
   final double surgeMultiplier;
@@ -78,6 +80,8 @@ class RideModel {
     this.rating = 0,
     this.paymentMethod = paymentCash,
     this.paymentStatus = paymentPending,
+    this.paymentId = '',
+    this.razorpayOrderId = '',
     this.baseFare = 0,
     this.distanceCharge = 0,
     this.surgeMultiplier = 1.0,
@@ -120,6 +124,8 @@ class RideModel {
       rating: (d['rating'] ?? 0).toInt(),
       paymentMethod: d['paymentMethod'] ?? paymentCash,
       paymentStatus: d['paymentStatus'] ?? paymentPending,
+      paymentId: d['paymentId'] ?? '',
+      razorpayOrderId: d['razorpayOrderId'] ?? '',
       baseFare: (d['baseFare'] ?? 0).toDouble(),
       distanceCharge: (d['distanceCharge'] ?? 0).toDouble(),
       surgeMultiplier: (d['surgeMultiplier'] ?? 1.0).toDouble(),
@@ -159,6 +165,8 @@ class RideModel {
         'rating': rating,
         'paymentMethod': paymentMethod,
         'paymentStatus': paymentStatus,
+        'paymentId': paymentId,
+        'razorpayOrderId': razorpayOrderId,
         'baseFare': baseFare,
         'distanceCharge': distanceCharge,
         'surgeMultiplier': surgeMultiplier,

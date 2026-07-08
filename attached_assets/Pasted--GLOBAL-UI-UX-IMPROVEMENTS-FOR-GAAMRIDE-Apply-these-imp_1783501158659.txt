@@ -1,0 +1,120 @@
+
+═══ GLOBAL UI/UX IMPROVEMENTS FOR GAAMRIDE ═══
+
+Apply these improvements across ALL screens in the Flutter app.
+
+── 1. COLOR SYSTEM ──────────────────────────────────
+Define in lib/theme/app_theme.dart:
+
+  static const Color primary = Color(0xFFf97316);      // orange
+  static const Color primaryDark = Color(0xFFea580c);  // darker orange
+  static const Color success = Color(0xFF16a34a);      // green
+  static const Color danger = Color(0xFFdc2626);       // red
+  static const Color textPrimary = Color(0xFF111827);
+  static const Color textSecondary = Color(0xFF6b7280);
+  static const Color surface = Color(0xFFf9fafb);      // page bg
+  static const Color card = Color(0xFFffffff);
+
+  static ThemeData get theme => ThemeData(
+    colorSchemeSeed: primary,
+    useMaterial3: true,
+    fontFamily: 'Poppins',    // or Nunito — add to pubspec
+    scaffoldBackgroundColor: surface,
+    appBarTheme: const AppBarTheme(
+      backgroundColor: primary,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      centerTitle: false,
+      titleTextStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.white),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        minimumSize: const Size(double.infinity, 52),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      ),
+    ),
+  );
+
+── 2. BOOKING SCREEN IMPROVEMENTS ───────────────────
+  - Village picker: use a bottom sheet with search, not a plain dropdown
+  - Show village name in Gujarati below English name
+  - After both villages picked: show animated "Calculating fare..." then reveal fare card
+  - Fare card: white card with orange accent border, rounded 16px
+  - Book button: full width, 52px height, orange, "Book ride" text
+
+── 3. SEARCHING SCREEN ──────────────────────────────
+  - Pulsing orange circle animation (Lottie or custom AnimationController)
+  - "Finding saathi near {pickupVillage}..." text
+  - Show estimated wait time: "Usually 2-5 minutes"
+  - Cancel button: outlined (not filled), red text, at bottom
+  - Countdown timer visible: "Auto-cancels in 2:47"
+
+── 4. RIDE ACCEPTED SCREEN ──────────────────────────
+  - Large green checkmark animation when saathi accepts
+  - Saathi avatar circle (initials, orange bg)
+  - Saathi name (16sp, bold) + vehicle number (13sp, gray)
+  - Star rating from previous rides: ⭐ 4.8
+  - Vehicle type icon (bike/auto/cycle)
+  - "On the way" status pill (blue, animated dot)
+  - Call button: circular, green, phone icon — top right of saathi card
+  - OTP shown prominently: large box, "Share OTP with saathi: 4821"
+    OTP digits: each in its own rounded box, 24sp, bold, orange
+
+── 5. OTP ENTRY (SAATHI SIDE) ───────────────────────
+  - Replace any plain TextField with a 4-box OTP widget
+  - Each box: 48×56px, rounded 10px, border orange on focus
+  - Auto-advance to next box on digit entry
+  - "Start Ride" button only enables when all 4 digits filled
+  - Show customer name above OTP field: "OTP from {customerName}"
+
+── 6. ACTIVE RIDE (BOTTOM CARD) ─────────────────────
+  - White card, top corners rounded 24px, rest straight
+  - Handle bar at top (gray pill, centered)
+  - Route: "{pickup} → {destination}" with arrow icon
+  - Fare: "₹{fare}" bold orange, right aligned
+  - Call button: small, outlined, phone icon + "Call"
+  - Expandable: tap handle to reveal full details
+
+── 7. HOME SCREEN IMPROVEMENT ───────────────────────
+  - Top banner: "GaamRide" logo left + profile avatar right
+  - Quick action cards (2 col grid):
+      🛵 Book Ride  |  🚛 Book Vehicle
+  - Both cards: white, rounded 16px, shadow sm, icon + label
+  - Recent activity: "Your last ride" card (if exists)
+  - Saathi home: large toggle "Go Online / Go Offline"
+      Toggle: pill switch, green when online, gray when offline
+      When online: pulsing green dot animation
+
+── 8. TYPOGRAPHY ────────────────────────────────────
+  Add to pubspec.yaml fonts section:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf  weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf weight: 600
+  Download from Google Fonts and place in assets/fonts/
+
+── 9. MICRO-INTERACTIONS ────────────────────────────
+  - All buttons: scale down to 0.96 on press (GestureDetector + AnimatedScale)
+  - Payment option rows: ink ripple orange tint on tap
+  - Status changes: fade-in transition (FadeTransition, 300ms)
+  - Success states: scale-in animation (ScaleTransition, overshoot curve)
+  - Loading buttons: replace text with SizedBox(16,16) CircularProgressIndicator white
+
+── 10. SNACKBAR / TOAST CONSISTENCY ─────────────────
+  Replace all showDialog errors with styled SnackBars:
+
+  // Success
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Row(children: [Icon(Icons.check, color: Colors.white), SizedBox(width:8), Text(message)]),
+    backgroundColor: Color(0xFF16a34a),
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    margin: EdgeInsets.all(16),
+    duration: Duration(seconds: 3),
+  ));
+
+  // Error — same but backgroundColor: Color(0xFFdc2626)

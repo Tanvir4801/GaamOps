@@ -1,0 +1,170 @@
+
+═══ lib/services/payment_service.dart ═══
+
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:upi_india/upi_india.dart';
+
+class PaymentService {
+  static Razorpay? _razorpay;
+  static Function(String paymentId)? _onSuccess;
+  static Function(String error)? _onFailure;
+
+  static const String _keyId = 'rzp_test_YOUR_KEY_HERE';
+  // Replace with rzp_live_xxx for production
+
+  // ── INITIALIZE ──────────────────────────────────────
+  static void init({
+    required Function(String paymentId) onSuccess,
+    required Function(String error) onFailure,
+  }) {
+    _onSuccess = onSuccess;
+    _onFailure = onFailure;
+    _razorpay = Razorpay();
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handleSuccess);
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _handleError);
+    _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleWallet);
+  }
+
+  static void dispose() {
+    _razorpay?.clear();
+    _razorpay = null;
+  }
+
+  // ── OPEN RAZORPAY CHECKOUT ───────────────────────────
+  // Called for GPay, PhonePe, Paytm, UPI methods
+  static void openCheckout({
+    required double amountInRupees,
+    required String rideId,
+    required String customerName,
+    required String customerPhone,
+    required String method,  // 'gpay' | 'phonepe' | 'paytm' | 'upi'
+  }) {
+    // Razorpay needs amount in paise (multiply by 100)
+    final amountPaise = (amountInRupees * 100).round();
+
+    // Map our method names to Razorpay prefill app names
+    final appName = {
+      'gpay': 'google_pay',
+      'phonepe': 'phonepe',
+      'paytm': 'paytm',
+      'upi': null,
+    }[method];
+
+    var options = {
+      'key': _keyId,
+      'amount': amountPaise,
+      'name': 'GaamRide',
+      'description': 'Ride payment - $rideId',
+      'currency': 'INR',
+      'prefill': {
+        'contact': customerPhone,
+        'name': customerName,
+        'method': 'upi',      // default to UPI
+      },
+      'theme': {
+        'color': '#f97316',   // GaamRide orange
+      },
+      'modal': {
+        'ondismiss': '',
+        'confirm_close': false,
+      },
+      'notes': {
+        'ride_id': rideId,
+      },
+    };
+
+    // If a specific UPI app is chosen, add it to prefill
+    if (appName != null) {
+      options['prefill']['vpa'] = '';
+      options['upi'] = {'flow': 'intent'};
+      // This opens the specific UPI app directly
+    }
+
+    try {
+      _razorpay!.open(options);
+    } catch (e) {
+      _onFailure?.call('Could not open payment: $e');
+    }
+  }
+
+  // ── UPI INDIA PACKAGE (direct app intent) ───────────
+  // Alternative: use upi_india package for direct app launch
+  static Future payWithUpiApp({
+    required String app,   // UpiApp.googlePay / UpiApp.phonePe / UpiApp.paytm
+    required double amount,
+    required String receiverUpiId,    // merchant UPI ID e.g. gaamride@razorpay
+    required String receiverName,
+    required String transactionNote,
+  }) async {
+    UpiIndia upiIndia = UpiIndia();
+    try {
+      UpiResponse response = await upiIndia.startTransaction(
+        app: app,
+        receiverUpiId: receiverUpiId,
+        receiverName: receiverName,
+        transactionRefId: 'GaamRide${DateTime.now().millisecondsSinceEpoch}',
+        transactionNote: transactionNote,
+        amount: amount,
+      );
+      return response;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ── HANDLERS ────────────────────────────────────────
+  static void _handleSuccess(PaymentSuccessResponse response) {
+    _onSuccess?.call(response.paymentId ?? '');
+  }
+
+  static void _handleError(PaymentFailureResponse response) {
+    _onFailure?.call(response.message ?? 'Payment failed');
+  }
+
+  static void _handleWallet(ExternalWalletResponse response) {
+    // wallet selected, treat as pending
+    _onSuccess?.call('wallet:${response.walletName}');
+  }
+}
+
+═══ IN payment_screen.dart — _processPayment() METHOD ═══
+
+Future _processPayment() async {
+  setState(() => _isProcessing = true);
+
+  if (_selectedMethod == 'cash') {
+    // Cash: no gateway, just save to Firestore and continue
+    await _saveCashPayment();
+    return;
+  }
+
+  // Initialize Razorpay with callbacks
+  PaymentService.init(
+    onSuccess: (paymentId) async {
+      await _saveOnlinePayment(paymentId);
+    },
+    onFailure: (error) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Payment failed: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    },
+  );
+
+  PaymentService.openCheckout(
+    amountInRupees: widget.fare,
+    rideId: widget.rideId,
+    customerName: widget.customerName,
+    customerPhone: widget.customerPhone,
+    method: _selectedMethod,
+  );
+}
+
+@override
+void dispose() {
+  PaymentService.dispose();
+  super.dispose();
+}

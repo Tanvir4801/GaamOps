@@ -12,6 +12,7 @@ import '../../widgets/loading_overlay.dart';
 import '../../widgets/radar_searching_widget.dart';
 import '../../widgets/fullscreen_ride_map.dart';
 import 'ride_complete_screen.dart';
+import 'payment_screen.dart';
 
 // Mahuva Taluka service area
 const _swBound = LatLng(20.78, 73.19);
@@ -79,9 +80,14 @@ class _RideTrackingScreenState extends State<RideTrackingScreen>
       if (ride.status == RideModel.completed) {
         _rideSub?.cancel();
         if (mounted) {
+          final needsPayment = ride.paymentStatus != RideModel.paymentPaid;
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => RideCompleteScreen(ride: ride)),
+            MaterialPageRoute(
+              builder: (_) => needsPayment
+                  ? PaymentScreen(ride: ride)
+                  : RideCompleteScreen(ride: ride),
+            ),
             (r) => r.isFirst,
           );
         }
