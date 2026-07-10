@@ -1,0 +1,85 @@
+# Feature Change Prompt for Replit — Static 4-Digit Ride Code (Rapido style)
+
+## Goal
+Replace the current **per-ride OTP** (which regenerates every time a ride is accepted) with a **permanent 4-digit "Ride Code"** that is generated **once when the customer profile is created**. This same code will be used to start every ride the customer books — no new code generation, no extra database writes/fetches per ride.
+
+---
+
+## 1. What changes conceptually
+- **Old flow:** Ride accepted → system generates a new OTP → stores it against that ride → shows to customer → driver enters it → verified against that ride's OTP.
+- **New flow:** Customer profile created → system generates a 4-digit code ONE TIME → stored permanently in the customer's profile → this same code is shown/used for every ride → driver enters it → verified against the customer's profile code (not a per-ride value).
+
+This removes the "generate + store + fetch OTP per ride" overhead entirely.
+
+---
+
+## 2. Database changes
+- Add a new field to the **Customer/User** table: `ride_code` (4-digit number, stored as string to preserve leading zeros, e.g. "0472").
+- This field is set **only once**, at profile creation time.
+- Optional but recommended: enforce uniqueness — when generating, check if the code already exists among customers; if it does, regenerate until unique. (Not strictly required since driver only ever deals with one accepted ride/customer at a time, but avoids confusion.)
+- **Do not** create/keep a separate "ride_otp" table or per-ride OTP field for new rides. Old ride records can keep their historical OTP field as-is for record purposes — just stop writing new values to it going forward.
+- Add a migration script: for all existing customers who don't yet have a `ride_code`, generate one and backfill it.
+
+---
+
+## 3. Code generation logic
+- Trigger: **on customer profile creation** (signup completion), not on ride booking/acceptance.
+- Logic: generate a random 4-digit number between 1000–9999 → check uniqueness in customers table → if collision, regenerate → save to `ride_code` field.
+- This code is immutable by default — customer cannot change it themselves during normal use.
+- **Admin override:** allow admin to manually regenerate a customer's `ride_code` from the Admin panel (e.g., if compromised or customer requests reset), with the same uniqueness check.
+
+---
+
+## 4. Flutter App — Customer side
+- Remove any logic that generates or fetches a new OTP after a ride is accepted.
+- On the "Driver Assigned / Driver Arriving" screen, simply display the customer's own `ride_code` (already available locally from their logged-in profile data — no extra API call needed).
+- Update the label/UI text to something like: **"Share this code with your driver to start the ride: XXXX"**
+- This code will look the same on every ride the customer ever takes — this is expected behavior, not a bug.
+
+---
+
+## 5. Flutter App — Saathi (Driver) side
+- Remove any logic that validates the entered code against a per-ride generated OTP.
+- When a driver accepts a ride, the ride/customer details response already includes customer info — make sure `ride_code` is included in that same payload (no extra fetch needed).
+- On the "Start Ride" screen, driver enters the 4-digit code told by the customer.
+- Validate the entered code locally/via API against the `ride_code` attached to that ride's customer object.
+- If it matches → update ride status to "Ongoing" → start trip.
+- If it doesn't match → show an error and allow retry (add a max retry limit, e.g., 5 attempts, to prevent brute-force guessing).
+
+---
+
+## 6. Backend / API changes
+- **Ride acceptance API:** include the customer's `ride_code` as part of the ride details response sent to the driver app (pull it from the customer profile at the time of ride assignment — do not generate anything new here).
+- **Start-ride API:** accept the code entered by driver → compare against the customer's stored `ride_code` → on match, update ride status to "Ongoing"/"Started". On mismatch, return an error response.
+- Remove any OTP-generation function/endpoint that used to run on ride acceptance.
+
+---
+
+## 7. Admin Web Panel changes
+- In the Customer management/profile screen, add a field to display each customer's **Ride Code**.
+- Add an action button: **"Regenerate Code"** — admin can reset a customer's code if needed (with uniqueness check applied).
+- Update any reports, exports, or ride-detail views that used to reference "OTP" to now reference "Ride Code" for new rides. Historical ride records can keep showing their old OTP as-is.
+- Remove/deprecate any admin screens tied to per-ride OTP logs if they exist (since OTPs are no longer generated per ride going forward).
+
+---
+
+## 8. Edge cases & safety notes
+- Since the code is now static and reused across rides, anyone who learns a customer's code could start a ride on their behalf in the future too — not just the current one. To reduce risk:
+  - Add a **"Regenerate my code"** option in the customer's app profile/settings, so they can reset it themselves if they feel it's been shared/compromised.
+  - Enforce a max wrong-attempt limit on the driver's code entry screen to prevent guessing.
+- Make sure the migration backfills codes for all existing customers before this feature goes live, so no customer is left without a code.
+- QA check: confirm the code shown to the customer and the code driver needs to enter are pulled from the exact same source (`ride_code` on customer profile) so they always match.
+
+---
+
+## 9. Summary of what to remove
+- Per-ride OTP generation logic (on ride acceptance).
+- Per-ride OTP storage/fetch logic.
+- Any OTP expiry/timer logic tied to individual rides (no longer needed since code doesn't change).
+
+## 10. Summary of what to add
+- `ride_code` field on customer profile, generated once at signup.
+- Migration/backfill script for existing customers.
+- Admin panel field + regenerate action.
+- Customer-side "regenerate my code" option (optional but recommended).
+- Updated UI labels on both customer and driver apps.

@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/village_model.dart';
 import '../../services/village_service.dart';
+import '../../services/ride_service.dart';
 import '../../widgets/village_selector_sheet.dart';
 import '../customer/customer_main_shell.dart';
 
@@ -89,6 +90,9 @@ class _CustomerRegistrationScreenState
         photoUrl = await ref.getDownloadURL();
       }
 
+      // Generate a unique 4-digit ride code for this customer (once at signup)
+      final rideCode = await generateUniqueRideCode();
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.uid)
@@ -102,6 +106,7 @@ class _CustomerRegistrationScreenState
         'profilePhoto': photoUrl,
         'fcmToken': '',
         'isBlocked': false,
+        'rideCode': rideCode,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });

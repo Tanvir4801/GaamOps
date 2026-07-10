@@ -620,7 +620,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen>
       bottomCard: _StartedBottomCard(
         saathiName: ride.saathiName,
         vehicleType: ride.vehicleType,
-        otp: ride.otp,
+        rideCode: ride.customerRideCode,
         onSOS: _showSOS,
       ),
     );
@@ -916,13 +916,13 @@ class _SaathiDotState extends State<_SaathiDot>
 class _StartedBottomCard extends StatelessWidget {
   final String saathiName;
   final String vehicleType;
-  final String otp;
+  final String rideCode;
   final VoidCallback onSOS;
 
   const _StartedBottomCard({
     required this.saathiName,
     required this.vehicleType,
-    required this.otp,
+    required this.rideCode,
     required this.onSOS,
   });
 
@@ -962,11 +962,11 @@ class _StartedBottomCard extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 10),
-        // Row 3 — OTP reference
+        // Row 3 — Ride Code reference
         Row(children: [
-          const Text('OTP: ',
+          const Text('Ride Code: ',
               style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
-          Text(otp,
+          Text(rideCode,
               style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -1157,16 +1157,16 @@ class _BottomCard extends StatelessWidget {
                 border: Border.all(color: AppColors.primaryGreen),
               ),
               child: Column(children: [
-                const Text('સાથીને આ OTP આપો',
+                const Text('સાથીને Ride Code આપો',
                     style: TextStyle(
                         fontSize: 14,
                         color: AppColors.primaryGreen,
                         fontWeight: FontWeight.w500)),
-                const Text('Give this OTP to your Saathi',
+                const Text('Share your Ride Code with Saathi',
                     style: TextStyle(
                         fontSize: 12, color: AppColors.textGrey)),
                 const SizedBox(height: 10),
-                Text(ride?.otp ?? '—',
+                Text(ride?.customerRideCode ?? '—',
                     style: const TextStyle(
                       fontSize: 42, fontWeight: FontWeight.bold,
                       color: AppColors.primaryGreen,

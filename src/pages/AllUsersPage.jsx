@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { doc, updateDoc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore'
+import { doc, updateDoc, serverTimestamp, orderBy, writeBatch, getDocs, query, collection, where, limit } from 'firebase/firestore'
 import toast from 'react-hot-toast'
 import { db } from '../firebase'
 import { useCollection } from '../hooks/useCollection.js'
@@ -35,6 +35,7 @@ export default function AllUsersPage() {
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [confirm, setConfirm] = useState(null)
+  const [regenerating, setRegenerating] = useState(null) // uid of in-progress regeneration
 
   const filtered = users.filter(u => {
     if (u.isDeleted) return false
@@ -59,6 +60,31 @@ export default function AllUsersPage() {
       toast.success(u.isBlocked ? `${u.name} unblocked ✅` : `${u.name} blocked 🚫`)
     } catch (err) {
       toast.error('Error: ' + err.message)
+    }
+  }
+
+  const handleRegenerateCode = async (u) => {
+    setRegenerating(u.id)
+    try {
+      let code, attempts = 0
+      do {
+        code = String(1000 + Math.floor(Math.random() * 9000))
+        const snap = await getDocs(
+          query(collection(db, 'users'), where('rideCode', '==', code), limit(1))
+        )
+        if (snap.empty) break
+        attempts++
+      } while (attempts < 50)
+
+      await updateDoc(doc(db, 'users', u.id), {
+        rideCode: code,
+        updatedAt: serverTimestamp(),
+      })
+      toast.success(`New ride code for ${u.name || u.phone}: ${code} 🔑`)
+    } catch (err) {
+      toast.error('Failed to regenerate: ' + err.message)
+    } finally {
+      setRegenerating(null)
     }
   }
 
@@ -136,7 +162,7 @@ export default function AllUsersPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Name', 'Phone', 'Role', 'Village', 'Status', 'Created', 'Actions'].map(h => (
+                  {['Name', 'Phone', 'Role', 'Village', 'Status', 'Ride Code', 'Created', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
                   ))}
                 </tr>
@@ -164,6 +190,27 @@ export default function AllUsersPage() {
                       <StatusBadge status={u.isBlocked ? 'blocked' : 'active'} />
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400">{formatDate(u.createdAt)}</td>
+                    {/* Ride Code — only meaningful for customers/both */}
+                    <td className="px-4 py-3">
+                      {(u.role === 'customer' || u.role === 'both') ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded-md bg-blue-50 px-2.5 py-1 font-mono text-sm font-bold tracking-widest text-blue-700">
+                            {u.rideCode || '—'}
+                          </span>
+                          <button
+                            type="button"
+                            title="Regenerate ride code"
+                            disabled={regenerating === u.id}
+                            onClick={() => handleRegenerateCode(u)}
+                            className="rounded p-1 text-blue-400 transition hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40"
+                          >
+                            {regenerating === u.id ? '⏳' : '🔄'}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button

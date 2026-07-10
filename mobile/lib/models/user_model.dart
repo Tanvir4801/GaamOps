@@ -10,6 +10,9 @@ class UserModel {
   final String profilePhoto;
   final String fcmToken;
   final bool isBlocked;
+  /// Permanent 4-digit code generated once at signup.
+  /// Shown to customer; driver enters it to start every ride.
+  final String rideCode;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -23,6 +26,7 @@ class UserModel {
     this.profilePhoto = '',
     this.fcmToken = '',
     this.isBlocked = false,
+    this.rideCode = '',
     this.createdAt,
     this.updatedAt,
   });
@@ -43,6 +47,7 @@ class UserModel {
       profilePhoto: d['profilePhoto'] ?? '',
       fcmToken: d['fcmToken'] ?? '',
       isBlocked: d['isBlocked'] ?? false,
+      rideCode: d['rideCode'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate(),
     );
@@ -58,6 +63,7 @@ class UserModel {
         'profilePhoto': profilePhoto,
         'fcmToken': fcmToken,
         'isBlocked': isBlocked,
+        'rideCode': rideCode,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -71,6 +77,7 @@ class UserModel {
     String? profilePhoto,
     String? fcmToken,
     bool? isBlocked,
+    String? rideCode,
   }) {
     return UserModel(
       uid: uid,
@@ -82,6 +89,7 @@ class UserModel {
       profilePhoto: profilePhoto ?? this.profilePhoto,
       fcmToken: fcmToken ?? this.fcmToken,
       isBlocked: isBlocked ?? this.isBlocked,
+      rideCode: rideCode ?? this.rideCode,
     );
   }
 }

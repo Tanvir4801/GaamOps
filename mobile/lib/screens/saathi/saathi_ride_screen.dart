@@ -40,11 +40,14 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
   LatLng? _myPosition;   // Saathi's own live GPS position
   bool _isLoading = false;
   bool _locationGranted = false;
+  int _wrongCodeAttempts = 0;
+  static const _maxWrongAttempts = 5;
 
   @override
   void initState() {
     super.initState();
     _ride = widget.ride;
+    _wrongCodeAttempts = 0; // reset for every new ride screen
 
     // Listen to ride doc for status changes
     _rideSub = RideService.watchRide(widget.ride.rideId).listen((snap) {
@@ -252,12 +255,29 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
       _setLoading(() => RideService.saathiArrived(widget.ride.rideId));
 
   Future<void> _startRide() async {
-    final otp = _otpController.text.trim();
-    final correctOtp = (_ride ?? widget.ride).otp;
-    if (otp != correctOtp) {
+    // Locked after too many wrong attempts
+    if (_wrongCodeAttempts >= _maxWrongAttempts) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('❌ Wrong OTP! Ask customer again.'),
+          content: Text('🔒 Too many wrong attempts. Contact support.'),
+          backgroundColor: AppColors.error,
+          duration: Duration(seconds: 4),
+        ));
+      }
+      return;
+    }
+
+    final entered = _otpController.text.trim();
+    final correct = (_ride ?? widget.ride).customerRideCode;
+
+    if (entered != correct) {
+      setState(() => _wrongCodeAttempts++);
+      final left = _maxWrongAttempts - _wrongCodeAttempts;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(left <= 0
+              ? '🔒 Too many wrong attempts. Contact support.'
+              : '❌ Wrong code! $left attempt${left == 1 ? '' : 's'} left.'),
           backgroundColor: AppColors.error,
         ));
       }
@@ -674,8 +694,17 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
                       fontWeight: FontWeight.bold,
                       letterSpacing: 10),
                   decoration: InputDecoration(
-                    labelText: 'Customer OTP',
-                    counterText: '',
+                    labelText: 'Customer Ride Code',
+                    hintText: '4-digit code',
+                    counterText: _wrongCodeAttempts > 0
+                        ? '${_maxWrongAttempts - _wrongCodeAttempts} attempts left'
+                        : '',
+                    counterStyle: TextStyle(
+                      color: _wrongCodeAttempts >= 3
+                          ? AppColors.error
+                          : AppColors.textGrey,
+                      fontSize: 12,
+                    ),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
                     focusedBorder: OutlineInputBorder(
@@ -683,13 +712,27 @@ class _SaathiRideScreenState extends State<SaathiRideScreen> {
                       borderSide: const BorderSide(
                           color: AppColors.primaryGreen, width: 2),
                     ),
+                    errorBorder: _wrongCodeAttempts >= _maxWrongAttempts
+                        ? OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: AppColors.error, width: 2))
+                        : null,
+                    prefixIcon: const Icon(Icons.tag,
+                        color: AppColors.primaryGreen, size: 20),
                   ),
                 ),
                 const SizedBox(height: 6),
                 _actionButton(
-                  label: 'Start Ride · ચાલુ',
-                  icon: Icons.play_circle,
-                  color: AppColors.primaryGreen,
+                  label: _wrongCodeAttempts >= _maxWrongAttempts
+                      ? '🔒 Locked'
+                      : 'Start Ride · ચાલુ',
+                  icon: _wrongCodeAttempts >= _maxWrongAttempts
+                      ? Icons.lock
+                      : Icons.play_circle,
+                  color: _wrongCodeAttempts >= _maxWrongAttempts
+                      ? Colors.grey
+                      : AppColors.primaryGreen,
                   onTap: _startRide,
                 ),
               ],

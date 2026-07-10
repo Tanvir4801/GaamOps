@@ -30,9 +30,15 @@ class DataValidator {
     final dist = (data['distance'] ?? 0).toDouble();
     assert(dist >= 0 && dist <= 50,
         'INVALID: distance out of range — check meters vs km: $dist');
+    // Legacy per-ride OTP — may be empty for new rides using customerRideCode
     final otp = data['otp'] as String? ?? '';
-    assert(otp.length == 4,
-        'INVALID: OTP must be 4 digits, got: ${otp.length}');
+    final customerRideCode = data['customerRideCode'] as String? ?? '';
+    assert(otp.isEmpty || otp.length == 4,
+        'INVALID: otp must be 4 digits when present, got: ${otp.length}');
+    assert(customerRideCode.isEmpty || customerRideCode.length == 4,
+        'INVALID: customerRideCode must be 4 digits when present, got: ${customerRideCode.length}');
+    assert(otp.isNotEmpty || customerRideCode.isNotEmpty,
+        'INVALID: ride must have either otp or customerRideCode');
   }
 
   static void validateHaulBooking(Map<String, dynamic> data) {

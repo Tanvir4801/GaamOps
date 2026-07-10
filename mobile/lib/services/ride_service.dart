@@ -2,6 +2,21 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/ride_model.dart';
 
+/// Generates a unique 4-digit ride code by checking against existing users.
+/// Call at registration time only — this is O(n) but runs once per signup.
+Future<String> generateUniqueRideCode() async {
+  final rng = Random();
+  final users = FirebaseFirestore.instance.collection('users');
+  while (true) {
+    final code = (1000 + rng.nextInt(9000)).toString();
+    final snap = await users
+        .where('rideCode', isEqualTo: code)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return code;
+  }
+}
+
 class RideService {
   static final _rides = FirebaseFirestore.instance.collection('rides');
 
@@ -18,6 +33,7 @@ class RideService {
     required double fare,
     required double distance,
     required String targetSaathiId,
+    String customerRideCode = '',
     String paymentMethod = RideModel.paymentCash,
     double baseFare = 0,
     double distanceCharge = 0,
@@ -28,7 +44,6 @@ class RideService {
     double promoDiscount = 0,
   }) async {
     final ref = _rides.doc();
-    final otp = (1000 + Random().nextInt(9000)).toString();
     await ref.set({
       'rideId': ref.id,
       'customerId': customerId,
@@ -47,7 +62,7 @@ class RideService {
       'status': RideModel.searching,
       'fare': fare,
       'distance': distance,
-      'otp': otp,
+      'customerRideCode': customerRideCode,
       'saathiLat': 0.0,
       'saathiLng': 0.0,
       'cancelReason': '',

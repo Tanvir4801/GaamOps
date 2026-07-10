@@ -145,6 +145,7 @@ class _RideRequestScreenState extends State<RideRequestScreen>
       fare: b.totalFare,
       distance: dist / 1000,
       targetSaathiId: widget.saathi?.uid ?? '',
+      customerRideCode: user?.rideCode ?? '',
       paymentMethod: method,
       baseFare: b.baseFare,
       distanceCharge: b.distanceCharge,

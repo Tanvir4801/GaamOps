@@ -7,6 +7,7 @@ import '../../constants/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/auth_service.dart';
+import '../../services/ride_service.dart';
 import '../welcome_screen.dart';
 import 'ride_history_screen.dart';
 import 'favourite_routes_screen.dart';
@@ -139,6 +140,65 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen>
           MaterialPageRoute(builder: (_) => const WelcomeScreen()),
           (_) => false,
         );
+      }
+    }
+  }
+
+  Future<void> _regenerateRideCode() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('Regenerate Ride Code?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text(
+            'A new 4-digit code will be generated.\n'
+            'Your old code will stop working immediately.\n\n'
+            'Make sure you share the new code before booking your next ride.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryOrange,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Generate New Code',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || _uid.isEmpty) return;
+
+    try {
+      final newCode = await generateUniqueRideCode();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_uid)
+          .update({
+        'rideCode': newCode,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('New Ride Code: $newCode ✅'),
+          backgroundColor: AppColors.primaryGreen,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Failed to regenerate code. Try again.'),
+          backgroundColor: AppColors.error,
+        ));
       }
     }
   }
@@ -345,6 +405,13 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen>
                   totalSpent: _totalSpent,
                   walletBalance: _walletBalance,
                   loaded: _statsLoaded,
+                ),
+                const SizedBox(height: 14),
+
+                // ── RIDE CODE CARD ──────────────────────────────
+                _RideCodeCard(
+                  rideCode: user.rideCode,
+                  onRegenerate: _regenerateRideCode,
                 ),
                 const SizedBox(height: 14),
 
@@ -761,6 +828,133 @@ class _ToggleTile extends StatelessWidget {
           onChanged: onChanged,
           activeColor: AppColors.primaryGreen,
         ),
+      ]),
+    );
+  }
+}
+
+// ── RIDE CODE CARD ────────────────────────────────────────────────
+class _RideCodeCard extends StatelessWidget {
+  final String rideCode;
+  final VoidCallback onRegenerate;
+
+  const _RideCodeCard({
+    required this.rideCode,
+    required this.onRegenerate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasCode = rideCode.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2730) : const Color(0xFFE8F5FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFF00B4D8).withAlpha(80),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00B4D8).withAlpha(20),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(children: [
+        Row(children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF00B4D8).withAlpha(30),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.tag_rounded,
+                color: Color(0xFF0077B6), size: 20),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('My Ride Code',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14)),
+              Text('Share with driver to start each ride',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.textGrey)),
+            ]),
+          ),
+          // Regenerate button
+          GestureDetector(
+            onTap: onRegenerate,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00B4D8).withAlpha(30),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: const Color(0xFF00B4D8).withAlpha(80)),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.refresh_rounded,
+                    size: 14, color: Color(0xFF0077B6)),
+                SizedBox(width: 4),
+                Text('New Code',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0077B6))),
+              ]),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        // Code display
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: const Color(0xFF00B4D8).withAlpha(60)),
+          ),
+          child: Text(
+            hasCode ? rideCode : '—',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: hasCode ? 46 : 32,
+              fontWeight: FontWeight.bold,
+              color: hasCode
+                  ? const Color(0xFF0077B6)
+                  : AppColors.textGrey,
+              letterSpacing: hasCode ? 18 : 0,
+            ),
+          ),
+        ),
+        if (!hasCode) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: onRegenerate,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00B4D8),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text('Generate My Ride Code',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+            ),
+          ),
+        ],
       ]),
     );
   }

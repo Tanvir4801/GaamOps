@@ -30,6 +30,9 @@ class RideModel {
   final bool paymentConfirmedBySaathi;
   final String paymentId;
   final String razorpayOrderId;
+  /// Permanent 4-digit customer ride code (from customer profile).
+  /// Falls back to legacy per-ride 'otp' for historical documents.
+  final String customerRideCode;
   final double baseFare;
   final double distanceCharge;
   final double surgeMultiplier;
@@ -86,6 +89,7 @@ class RideModel {
     this.paymentConfirmedBySaathi = false,
     this.paymentId = '',
     this.razorpayOrderId = '',
+    this.customerRideCode = '',
     this.baseFare = 0,
     this.distanceCharge = 0,
     this.surgeMultiplier = 1.0,
@@ -131,6 +135,9 @@ class RideModel {
       paymentConfirmedBySaathi: d['paymentConfirmedBySaathi'] == true,
       paymentId: d['paymentId'] ?? '',
       razorpayOrderId: d['razorpayOrderId'] ?? '',
+      // Prefer new field; fall back to legacy per-ride otp for old documents
+      customerRideCode: d['customerRideCode'] as String? ??
+          d['otp'] as String? ?? '',
       baseFare: (d['baseFare'] ?? 0).toDouble(),
       distanceCharge: (d['distanceCharge'] ?? 0).toDouble(),
       surgeMultiplier: (d['surgeMultiplier'] ?? 1.0).toDouble(),
@@ -164,6 +171,7 @@ class RideModel {
         'fare': fare,
         'distance': distance,
         'otp': otp,
+        'customerRideCode': customerRideCode,
         'saathiLat': saathiLat,
         'saathiLng': saathiLng,
         'cancelReason': cancelReason,
